@@ -226,7 +226,7 @@ User
 | M4 — Discover workspace | ✅ Implemented | 6/6 | Grounded search/chat and evidence UI |
 | M5 — Create artifacts | ✅ Implemented | 5/5 | Persistent editable cited outputs |
 | M6 — Automate workflows | ✅ Implemented | 7/7 | Small model-assisted workflow system |
-| M7 — Evaluation and reliability | 🟨 Partial | 3/5 | Deterministic and live-model evidence |
+| M7 — Evaluation and reliability | 🟨 Partial | 4/5 | Deterministic and live-model evidence |
 | M8 — Self-hosted learning experience | ⬜ Not started | 0/4 | One-command stack and teaching path |
 
 ---
@@ -1692,8 +1692,8 @@ Add billable end-to-end Cohere scenario evaluations
 
 ## E7.4 — Failure matrix, retries, and trace replay
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E3.5, E7.1
 
 Scope:

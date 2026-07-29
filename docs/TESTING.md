@@ -45,3 +45,8 @@ usage. Citation and approval-policy failures are deterministic; semantic claim
 coverage, forbidden behavior, and response structure are model-judged. The
 harness supplies read-only evidence and never executes a proposed write, so
 repeated runs do not mutate the mock systems.
+
+Run the deterministic failure matrix, retry, approval-restart, corrupted-log,
+and trace replay checks with `pytest tests/reliability`. Recovery behavior and
+the read-only replay versus fresh linked re-run distinction are documented in
+[Failure recovery and trace replay](RELIABILITY.md).
