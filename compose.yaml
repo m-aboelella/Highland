@@ -1,0 +1,43 @@
+x-mock-service: &mock-service
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  volumes:
+    - ./var:/data/runtime
+  restart: unless-stopped
+
+services:
+  catalog:
+    <<: *mock-service
+    command: ["serve", "catalog", "--host", "0.0.0.0", "--port", "8099"]
+    ports: ["8099:8099"]
+
+  atlas-crm:
+    <<: *mock-service
+    command: ["serve", "crm", "--host", "0.0.0.0", "--port", "8101"]
+    ports: ["8101:8101"]
+
+  archive:
+    <<: *mock-service
+    command: ["serve", "knowledge", "--host", "0.0.0.0", "--port", "8102"]
+    ports: ["8102:8102"]
+
+  relay-desk:
+    <<: *mock-service
+    command: ["serve", "support", "--host", "0.0.0.0", "--port", "8103"]
+    ports: ["8103:8103"]
+
+  beacon:
+    <<: *mock-service
+    command: ["serve", "observability", "--host", "0.0.0.0", "--port", "8104"]
+    ports: ["8104:8104"]
+
+  pulse:
+    <<: *mock-service
+    command: ["serve", "communications", "--host", "0.0.0.0", "--port", "8105"]
+    ports: ["8105:8105"]
+
+  track:
+    <<: *mock-service
+    command: ["serve", "projects", "--host", "0.0.0.0", "--port", "8106"]
+    ports: ["8106:8106"]

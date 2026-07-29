@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "highland-educational"
+version = "0.1.0"
+description = "Self-contained mock enterprise systems and MCP connectors for Highland"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "mcp>=1.12,<2",
+  "pydantic>=2.10,<3",
+  "uvicorn[standard]>=0.34,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3,<9",
+  "pytest-asyncio>=0.25,<1",
+  "ruff>=0.12,<1",
+]
+
+[project.scripts]
+highland-mocks = "highland_mocks.cli:main"
+highland-mcp = "highland_mocks.mcp_server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/highland_mocks"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

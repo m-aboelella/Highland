@@ -1,0 +1,159 @@
+{
+  "meta": {
+    "dataset_version": "2026.07.29.1",
+    "as_of": "2026-07-29T12:00:00Z"
+  },
+  "documents": [
+    {
+      "source_system": "archive",
+      "record_id": "doc_latency_runbook",
+      "id": "doc_latency_runbook",
+      "title": "Runbook: elevated retrieval latency",
+      "document_type": "runbook",
+      "team": "site-reliability",
+      "customer_id": null,
+      "version": "3.4",
+      "visibility": "support",
+      "updated_at": "2026-06-18T14:00:00Z",
+      "source_url": "https://archive.summit.test/docs/doc_latency_runbook",
+      "passages": [
+        {
+          "passage_id": "pas_latency_triage",
+          "ordinal": 1,
+          "section": "Triage order",
+          "text": "For a sustained retrieval p95 above 900 ms, first compare query volume, error rate, and shard memory. If volume is stable and one shard exceeds 85% memory, inspect compaction and cache eviction before scaling the whole cluster."
+        },
+        {
+          "passage_id": "pas_latency_compaction",
+          "ordinal": 2,
+          "section": "Compaction contention",
+          "text": "Background index compaction can contend with retrieval when a shard has less than 15% free memory. Pause the compaction job, allow caches to recover for 20 minutes, then compare p50 and p95. Do not restart all nodes at once."
+        },
+        {
+          "passage_id": "pas_latency_customer_update",
+          "ordinal": 3,
+          "section": "Customer communication",
+          "text": "Tell the customer what users experienced, the current mitigation, and the next checkpoint. Label suspected causes as hypotheses until correlated with logs. Never promise a resolution time before the mitigation has been observed under representative load."
+        }
+      ],
+      "file_name": "doc_latency_runbook.md",
+      "download_url": "http://localhost:8102/documents/doc_latency_runbook/download"
+    },
+    {
+      "source_system": "archive",
+      "record_id": "doc_private_cloud_arch",
+      "id": "doc_private_cloud_arch",
+      "title": "Private-cloud deployment architecture",
+      "document_type": "architecture",
+      "team": "platform",
+      "customer_id": null,
+      "version": "5.1",
+      "visibility": "company",
+      "updated_at": "2026-05-20T08:30:00Z",
+      "source_url": "https://archive.summit.test/docs/doc_private_cloud_arch",
+      "passages": [
+        {
+          "passage_id": "pas_private_topology",
+          "ordinal": 1,
+          "section": "Standard topology",
+          "text": "The standard regulated topology uses three retrieval nodes across separate failure domains, a dedicated ingestion worker, and an external PostgreSQL metadata store. Customer traffic enters through their managed gateway."
+        },
+        {
+          "passage_id": "pas_private_telemetry",
+          "ordinal": 2,
+          "section": "Telemetry",
+          "text": "Private-cloud deployments export aggregate service metrics to Beacon through an outbound-only collector. Document content, search queries, and result payloads never leave the customer environment."
+        }
+      ],
+      "file_name": "doc_private_cloud_arch.md",
+      "download_url": "http://localhost:8102/documents/doc_private_cloud_arch/download"
+    },
+    {
+      "source_system": "archive",
+      "record_id": "doc_4182_release",
+      "id": "doc_4182_release",
+      "title": "Summit Search 4.18.2 release notes",
+      "document_type": "release-notes",
+      "team": "product",
+      "customer_id": null,
+      "version": "4.18.2",
+      "visibility": "company",
+      "updated_at": "2026-07-10T12:00:00Z",
+      "source_url": "https://archive.summit.test/docs/doc_4182_release",
+      "passages": [
+        {
+          "passage_id": "pas_4182_compaction",
+          "ordinal": 1,
+          "section": "Index maintenance",
+          "text": "Version 4.18.2 reduces average compaction duration for newly created indexes. Existing large shards can temporarily use more memory during their first post-upgrade compaction. Schedule that operation outside peak query periods."
+        },
+        {
+          "passage_id": "pas_4182_known",
+          "ordinal": 2,
+          "section": "Known limitations",
+          "text": "On clusters with shards above 1.5 TB, compaction concurrency must remain at one until the shard has completed its first 4.18.2 cycle."
+        }
+      ],
+      "file_name": "doc_4182_release.md",
+      "download_url": "http://localhost:8102/documents/doc_4182_release/download"
+    },
+    {
+      "source_system": "archive",
+      "record_id": "doc_incident_policy",
+      "id": "doc_incident_policy",
+      "title": "Customer incident severity and communication policy",
+      "document_type": "policy",
+      "team": "support",
+      "customer_id": null,
+      "version": "2.2",
+      "visibility": "support",
+      "updated_at": "2026-04-05T10:00:00Z",
+      "source_url": "https://archive.summit.test/docs/doc_incident_policy",
+      "passages": [
+        {
+          "passage_id": "pas_severity_p1",
+          "ordinal": 1,
+          "section": "Priority 1",
+          "text": "A production degradation affecting a primary customer workflow with no acceptable workaround is Priority 1. Provide an update at least every 60 minutes while actively mitigating."
+        },
+        {
+          "passage_id": "pas_incident_approval",
+          "ordinal": 2,
+          "section": "External updates",
+          "text": "Drafts generated from internal investigation notes require a human owner to verify customer-safe wording before they are posted to an external channel."
+        }
+      ],
+      "file_name": "doc_incident_policy.md",
+      "download_url": "http://localhost:8102/documents/doc_incident_policy/download"
+    },
+    {
+      "source_system": "archive",
+      "record_id": "doc_northwind_success_plan",
+      "id": "doc_northwind_success_plan",
+      "title": "Northwind Bank 2026 success plan",
+      "document_type": "customer-plan",
+      "team": "customer-success",
+      "customer_id": "cus_northwind",
+      "version": "1.6",
+      "visibility": "customer-success",
+      "updated_at": "2026-07-01T11:00:00Z",
+      "source_url": "https://archive.summit.test/docs/doc_northwind_success_plan",
+      "passages": [
+        {
+          "passage_id": "pas_northwind_outcomes",
+          "ordinal": 1,
+          "section": "Business outcomes",
+          "text": "Northwind\u2019s 2026 target is to reduce analyst time spent locating approved policy material by 30%. The executive sponsor will assess adoption, answer quality, and stable performance at the October renewal review."
+        },
+        {
+          "passage_id": "pas_northwind_actions",
+          "ordinal": 2,
+          "section": "Open success actions",
+          "text": "Summit will deliver a capacity review before August 7. Northwind will confirm its Q4 ingestion forecast. Both teams will agree on a latency service-level objective before renewal planning."
+        }
+      ],
+      "file_name": "doc_northwind_success_plan.md",
+      "download_url": "http://localhost:8102/documents/doc_northwind_success_plan/download"
+    }
+  ]
+}

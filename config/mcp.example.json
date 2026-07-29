@@ -1,0 +1,46 @@
+{
+  "mcpServers": {
+    "highland-atlas-crm": {
+      "command": "/absolute/path/to/Highland/.venv/bin/highland-mcp",
+      "args": ["crm"],
+      "env": {
+        "HIGHLAND_CRM_URL": "http://localhost:8101"
+      }
+    },
+    "highland-archive": {
+      "command": "/absolute/path/to/Highland/.venv/bin/highland-mcp",
+      "args": ["knowledge"],
+      "env": {
+        "HIGHLAND_KNOWLEDGE_URL": "http://localhost:8102"
+      }
+    },
+    "highland-relay-desk": {
+      "command": "/absolute/path/to/Highland/.venv/bin/highland-mcp",
+      "args": ["support"],
+      "env": {
+        "HIGHLAND_SUPPORT_URL": "http://localhost:8103"
+      }
+    },
+    "highland-beacon": {
+      "command": "/absolute/path/to/Highland/.venv/bin/highland-mcp",
+      "args": ["observability"],
+      "env": {
+        "HIGHLAND_OBSERVABILITY_URL": "http://localhost:8104"
+      }
+    },
+    "highland-pulse": {
+      "command": "/absolute/path/to/Highland/.venv/bin/highland-mcp",
+      "args": ["communications"],
+      "env": {
+        "HIGHLAND_COMMUNICATIONS_URL": "http://localhost:8105"
+      }
+    },
+    "highland-track": {
+      "command": "/absolute/path/to/Highland/.venv/bin/highland-mcp",
+      "args": ["projects"],
+      "env": {
+        "HIGHLAND_PROJECTS_URL": "http://localhost:8106"
+      }
+    }
+  }
+}

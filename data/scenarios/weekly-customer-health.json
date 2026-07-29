@@ -1,0 +1,24 @@
+{
+  "id": "scenario_weekly_customer_health",
+  "title": "Weekly customer health report",
+  "prompt": "For every active enterprise customer, collect commercial context, deployment health, open support signals, and unresolved work. Classify each as healthy, watch, or at risk and produce an evidence-backed summary table.",
+  "required_tools": [
+    "list_customers",
+    "get_deployment",
+    "list_customer_tickets",
+    "list_incidents",
+    "list_project_issues"
+  ],
+  "loop_over": "active customers",
+  "expected_accounts": {
+    "cus_northwind": "watch",
+    "cus_alpine": "healthy",
+    "cus_lumon": "at_risk"
+  },
+  "expected_behavior": [
+    "Keep missing signals explicit rather than inventing them.",
+    "Use customer IDs to join records.",
+    "Attach evidence to every non-healthy classification.",
+    "Do not let Northwind records leak into Alpine or Lumon rows."
+  ]
+}

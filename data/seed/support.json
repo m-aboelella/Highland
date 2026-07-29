@@ -1,0 +1,133 @@
+{
+  "meta": {
+    "dataset_version": "2026.07.29.1",
+    "as_of": "2026-07-29T12:00:00Z"
+  },
+  "tickets": [
+    {
+      "source_system": "relay",
+      "record_id": "tkt_1042",
+      "id": "tkt_1042",
+      "key": "SUP-1042",
+      "customer_id": "cus_northwind",
+      "title": "Production search latency above SLO",
+      "status": "open",
+      "priority": "P1",
+      "category": "performance",
+      "assignee": {
+        "id": "usr_priya",
+        "name": "Priya Nair"
+      },
+      "requester": {
+        "id": "con_tomas",
+        "name": "Tomas Reed"
+      },
+      "created_at": "2026-07-28T13:18:00Z",
+      "updated_at": "2026-07-29T11:42:00Z",
+      "description": "Northwind reports analyst searches taking 1.5\u20132.2 seconds. Normal p95 is under 700 ms. The slowdown began after the weekend maintenance window.",
+      "comments": [
+        {
+          "id": "cmt_1042_1",
+          "author": "Tomas Reed",
+          "visibility": "external",
+          "created_at": "2026-07-28T13:18:00Z",
+          "text": "The issue is reproducible across policy and analyst indexes."
+        },
+        {
+          "id": "cmt_1042_2",
+          "author": "Priya Nair",
+          "visibility": "internal",
+          "created_at": "2026-07-29T08:05:00Z",
+          "text": "Query volume is flat. Beacon shows retrieval shard 3 memory at 91% during compaction. Pausing the job brought p95 below 900 ms."
+        },
+        {
+          "id": "cmt_1042_3",
+          "author": "Jonah Okafor",
+          "visibility": "internal",
+          "created_at": "2026-07-29T11:42:00Z",
+          "text": "Hypothesis is memory contention from the first 4.18.2 compaction, not yet confirmed. Need a controlled compaction tonight."
+        }
+      ],
+      "visibility": "support",
+      "source_url": "https://relay.summit.test/tickets/SUP-1042"
+    },
+    {
+      "source_system": "relay",
+      "record_id": "tkt_1033",
+      "id": "tkt_1033",
+      "key": "SUP-1033",
+      "customer_id": "cus_northwind",
+      "title": "Collector certificate rotation",
+      "status": "resolved",
+      "priority": "P3",
+      "category": "configuration",
+      "assignee": {
+        "id": "usr_priya",
+        "name": "Priya Nair"
+      },
+      "requester": {
+        "id": "con_tomas",
+        "name": "Tomas Reed"
+      },
+      "created_at": "2026-07-16T09:20:00Z",
+      "updated_at": "2026-07-18T16:12:00Z",
+      "description": "Beacon telemetry collector certificate was due to expire.",
+      "comments": [],
+      "resolution": "New certificate installed and telemetry continuity verified.",
+      "visibility": "support",
+      "source_url": "https://relay.summit.test/tickets/SUP-1033"
+    },
+    {
+      "source_system": "relay",
+      "record_id": "tkt_1018",
+      "id": "tkt_1018",
+      "key": "SUP-1018",
+      "customer_id": "cus_northwind",
+      "title": "Bulk ingestion job missed two PDFs",
+      "status": "resolved",
+      "priority": "P3",
+      "category": "ingestion",
+      "assignee": {
+        "id": "usr_sam",
+        "name": "Sam Rivera"
+      },
+      "requester": {
+        "id": "con_tomas",
+        "name": "Tomas Reed"
+      },
+      "created_at": "2026-06-20T10:00:00Z",
+      "updated_at": "2026-06-21T12:00:00Z",
+      "description": "Two password-protected PDFs were skipped by the ingestion job.",
+      "comments": [],
+      "resolution": "Files were re-exported without passwords and ingested.",
+      "visibility": "support",
+      "source_url": "https://relay.summit.test/tickets/SUP-1018"
+    },
+    {
+      "source_system": "relay",
+      "record_id": "tkt_1045",
+      "id": "tkt_1045",
+      "key": "SUP-1045",
+      "customer_id": "cus_alpine",
+      "title": "Synonym export format question",
+      "status": "open",
+      "priority": "P4",
+      "category": "how-to",
+      "assignee": {
+        "id": "usr_sam",
+        "name": "Sam Rivera"
+      },
+      "requester": {
+        "id": "con_alpine_ops",
+        "name": "Riley Morgan"
+      },
+      "created_at": "2026-07-29T08:00:00Z",
+      "updated_at": "2026-07-29T08:00:00Z",
+      "description": "Customer asks whether synonym exports preserve comments.",
+      "comments": [],
+      "visibility": "support",
+      "source_url": "https://relay.summit.test/tickets/SUP-1045"
+    }
+  ],
+  "idempotency": {}
+}

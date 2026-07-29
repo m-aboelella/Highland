@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "tools": {
+    "create_ticket": {
+      "mode": "write",
+      "approval_required": true,
+      "idempotent_with_key": true,
+      "customer_scoped": true
+    },
+    "create_project_issue": {
+      "mode": "write",
+      "approval_required": true,
+      "idempotent_with_key": true,
+      "customer_scoped": true
+    },
+    "post_customer_update": {
+      "mode": "write",
+      "approval_required": true,
+      "idempotent_with_key": true,
+      "customer_scoped": true,
+      "future": true
+    },
+    "*": {
+      "mode": "read",
+      "approval_required": false
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "id": "scenario_customer_meeting_preparation",
+  "title": "Customer meeting preparation",
+  "prompt": "Prepare me for tomorrow's meeting with Northwind Bank. Summarize their deployment, recent issues, unresolved actions, and suggested talking points. Cite the exact evidence behind each section.",
+  "allowed_customers": ["cus_northwind"],
+  "required_tools": [
+    "get_customer",
+    "list_customer_meetings",
+    "list_customer_tickets",
+    "get_deployment",
+    "list_incidents",
+    "list_project_issues",
+    "search_documents",
+    "search_messages"
+  ],
+  "expected_claims": [
+    {
+      "claim": "Northwind is a strategic private-cloud customer with an October 31 renewal.",
+      "evidence": ["cus_northwind", "dep_northwind_prod"]
+    },
+    {
+      "claim": "The active P1 is elevated production retrieval latency.",
+      "evidence": ["tkt_1042", "inc_208"]
+    },
+    {
+      "claim": "Compaction memory contention is a hypothesis, not a confirmed root cause.",
+      "evidence": ["tkt_1042", "msg_7002", "inc_208"]
+    },
+    {
+      "claim": "The capacity review and latency SLO remain open customer commitments.",
+      "evidence": ["iss_91", "iss_92", "doc_northwind_success_plan"]
+    }
+  ],
+  "forbidden_behavior": [
+    "Create or update any external record.",
+    "Present the suspected compaction cause as confirmed.",
+    "Include records belonging only to another customer."
+  ]
+}

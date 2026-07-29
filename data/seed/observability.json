@@ -1,0 +1,1066 @@
+{
+  "meta": {
+    "dataset_version": "2026.07.29.1",
+    "as_of": "2026-07-29T12:00:00Z"
+  },
+  "deployments": [
+    {
+      "source_system": "beacon",
+      "record_id": "dep_northwind_prod",
+      "id": "dep_northwind_prod",
+      "customer_id": "cus_northwind",
+      "name": "northwind-eu-production",
+      "environment": "production",
+      "deployment_type": "private-cloud",
+      "region": "eu-west-1",
+      "version": "4.18.2",
+      "topology": {
+        "retrieval_nodes": 3,
+        "ingestion_workers": 1,
+        "metadata_store": "customer-managed PostgreSQL",
+        "index_shards": 6
+      },
+      "health": "degraded",
+      "last_change_at": "2026-07-27T01:00:00Z",
+      "change_summary": "Upgraded from 4.17.6 to 4.18.2",
+      "visibility": "engineering",
+      "updated_at": "2026-07-29T11:55:00Z",
+      "source_url": "https://beacon.summit.test/deployments/dep_northwind_prod"
+    },
+    {
+      "source_system": "beacon",
+      "record_id": "dep_alpine_prod",
+      "id": "dep_alpine_prod",
+      "customer_id": "cus_alpine",
+      "name": "alpine-us-production",
+      "environment": "production",
+      "deployment_type": "summit-cloud",
+      "region": "us-east-2",
+      "version": "4.18.2",
+      "topology": {
+        "retrieval_nodes": 3,
+        "ingestion_workers": 2,
+        "index_shards": 4
+      },
+      "health": "healthy",
+      "last_change_at": "2026-07-21T02:00:00Z",
+      "change_summary": "Routine patch rollout",
+      "visibility": "engineering",
+      "updated_at": "2026-07-29T11:55:00Z",
+      "source_url": "https://beacon.summit.test/deployments/dep_alpine_prod"
+    },
+    {
+      "source_system": "beacon",
+      "record_id": "dep_lumon_stage",
+      "id": "dep_lumon_stage",
+      "customer_id": "cus_lumon",
+      "name": "lumon-us-staging",
+      "environment": "staging",
+      "deployment_type": "private-cloud",
+      "region": "us-west-2",
+      "version": "4.18.1",
+      "topology": {
+        "retrieval_nodes": 2,
+        "ingestion_workers": 1,
+        "index_shards": 2
+      },
+      "health": "healthy",
+      "last_change_at": "2026-07-11T18:00:00Z",
+      "change_summary": "Initial staging deployment",
+      "visibility": "engineering",
+      "updated_at": "2026-07-29T11:55:00Z",
+      "source_url": "https://beacon.summit.test/deployments/dep_lumon_stage"
+    }
+  ],
+  "metrics": {
+    "dep_northwind_prod": [
+      {
+        "metric": "retrieval.p95_ms",
+        "unit": "ms",
+        "samples": [
+          {
+            "timestamp": "2026-07-28T12:00:00Z",
+            "value": 610.0
+          },
+          {
+            "timestamp": "2026-07-28T13:00:00Z",
+            "value": 634.4
+          },
+          {
+            "timestamp": "2026-07-28T14:00:00Z",
+            "value": 597.8
+          },
+          {
+            "timestamp": "2026-07-28T15:00:00Z",
+            "value": 646.6
+          },
+          {
+            "timestamp": "2026-07-28T16:00:00Z",
+            "value": 591.7
+          },
+          {
+            "timestamp": "2026-07-28T17:00:00Z",
+            "value": 622.2
+          },
+          {
+            "timestamp": "2026-07-28T18:00:00Z",
+            "value": 610.0
+          },
+          {
+            "timestamp": "2026-07-28T19:00:00Z",
+            "value": 634.4
+          },
+          {
+            "timestamp": "2026-07-28T20:00:00Z",
+            "value": 597.8
+          },
+          {
+            "timestamp": "2026-07-28T21:00:00Z",
+            "value": 646.6
+          },
+          {
+            "timestamp": "2026-07-28T22:00:00Z",
+            "value": 591.7
+          },
+          {
+            "timestamp": "2026-07-28T23:00:00Z",
+            "value": 622.2
+          },
+          {
+            "timestamp": "2026-07-29T00:00:00Z",
+            "value": 610.0
+          },
+          {
+            "timestamp": "2026-07-29T01:00:00Z",
+            "value": 1365.8
+          },
+          {
+            "timestamp": "2026-07-29T02:00:00Z",
+            "value": 1370.6
+          },
+          {
+            "timestamp": "2026-07-29T03:00:00Z",
+            "value": 1460.8
+          },
+          {
+            "timestamp": "2026-07-29T04:00:00Z",
+            "value": 1281.7
+          },
+          {
+            "timestamp": "2026-07-29T05:00:00Z",
+            "value": 1353.6
+          },
+          {
+            "timestamp": "2026-07-29T06:00:00Z",
+            "value": 1382.8
+          },
+          {
+            "timestamp": "2026-07-29T07:00:00Z",
+            "value": 1448.6
+          },
+          {
+            "timestamp": "2026-07-29T08:00:00Z",
+            "value": 1287.8
+          },
+          {
+            "timestamp": "2026-07-29T09:00:00Z",
+            "value": 1378.0
+          },
+          {
+            "timestamp": "2026-07-29T10:00:00Z",
+            "value": 1364.5
+          },
+          {
+            "timestamp": "2026-07-29T11:00:00Z",
+            "value": 1436.4
+          },
+          {
+            "timestamp": "2026-07-29T12:00:00Z",
+            "value": 1300.0
+          }
+        ]
+      },
+      {
+        "metric": "retrieval.p50_ms",
+        "unit": "ms",
+        "samples": [
+          {
+            "timestamp": "2026-07-28T12:00:00Z",
+            "value": 210.0
+          },
+          {
+            "timestamp": "2026-07-28T13:00:00Z",
+            "value": 218.4
+          },
+          {
+            "timestamp": "2026-07-28T14:00:00Z",
+            "value": 205.8
+          },
+          {
+            "timestamp": "2026-07-28T15:00:00Z",
+            "value": 222.6
+          },
+          {
+            "timestamp": "2026-07-28T16:00:00Z",
+            "value": 203.7
+          },
+          {
+            "timestamp": "2026-07-28T17:00:00Z",
+            "value": 214.2
+          },
+          {
+            "timestamp": "2026-07-28T18:00:00Z",
+            "value": 210.0
+          },
+          {
+            "timestamp": "2026-07-28T19:00:00Z",
+            "value": 218.4
+          },
+          {
+            "timestamp": "2026-07-28T20:00:00Z",
+            "value": 205.8
+          },
+          {
+            "timestamp": "2026-07-28T21:00:00Z",
+            "value": 222.6
+          },
+          {
+            "timestamp": "2026-07-28T22:00:00Z",
+            "value": 203.7
+          },
+          {
+            "timestamp": "2026-07-28T23:00:00Z",
+            "value": 214.2
+          },
+          {
+            "timestamp": "2026-07-29T00:00:00Z",
+            "value": 210.0
+          },
+          {
+            "timestamp": "2026-07-29T01:00:00Z",
+            "value": 398.6
+          },
+          {
+            "timestamp": "2026-07-29T02:00:00Z",
+            "value": 396.2
+          },
+          {
+            "timestamp": "2026-07-29T03:00:00Z",
+            "value": 423.2
+          },
+          {
+            "timestamp": "2026-07-29T04:00:00Z",
+            "value": 373.7
+          },
+          {
+            "timestamp": "2026-07-29T05:00:00Z",
+            "value": 394.4
+          },
+          {
+            "timestamp": "2026-07-29T06:00:00Z",
+            "value": 400.4
+          },
+          {
+            "timestamp": "2026-07-29T07:00:00Z",
+            "value": 419.0
+          },
+          {
+            "timestamp": "2026-07-29T08:00:00Z",
+            "value": 375.8
+          },
+          {
+            "timestamp": "2026-07-29T09:00:00Z",
+            "value": 402.8
+          },
+          {
+            "timestamp": "2026-07-29T10:00:00Z",
+            "value": 394.1
+          },
+          {
+            "timestamp": "2026-07-29T11:00:00Z",
+            "value": 414.8
+          },
+          {
+            "timestamp": "2026-07-29T12:00:00Z",
+            "value": 380.0
+          }
+        ]
+      },
+      {
+        "metric": "retrieval.error_rate",
+        "unit": "ratio",
+        "samples": [
+          {
+            "timestamp": "2026-07-28T12:00:00Z",
+            "value": 0.002
+          },
+          {
+            "timestamp": "2026-07-28T13:00:00Z",
+            "value": 0.002
+          },
+          {
+            "timestamp": "2026-07-28T14:00:00Z",
+            "value": 0.002
+          },
+          {
+            "timestamp": "2026-07-28T15:00:00Z",
+            "value": 0.002
+          },
+          {
+            "timestamp": "2026-07-28T16:00:00Z",
+            "value": 0.002
+          },
+          {
+            "timestamp": "2026-07-28T17:00:00Z",
+            "value": 0.002
+          },
+          {
+            "timestamp": "2026-07-28T18:00:00Z",
+            "value": 0.002
+          },
+          {
+            "timestamp": "2026-07-28T19:00:00Z",
+            "value": 0.002
+          },
+          {
+            "timestamp": "2026-07-28T20:00:00Z",
+            "value": 0.002
+          },
+          {
+            "timestamp": "2026-07-28T21:00:00Z",
+            "value": 0.002
+          },
+          {
+            "timestamp": "2026-07-28T22:00:00Z",
+            "value": 0.002
+          },
+          {
+            "timestamp": "2026-07-28T23:00:00Z",
+            "value": 0.002
+          },
+          {
+            "timestamp": "2026-07-29T00:00:00Z",
+            "value": 0.002
+          },
+          {
+            "timestamp": "2026-07-29T01:00:00Z",
+            "value": 0.005
+          },
+          {
+            "timestamp": "2026-07-29T02:00:00Z",
+            "value": 0.005
+          },
+          {
+            "timestamp": "2026-07-29T03:00:00Z",
+            "value": 0.006
+          },
+          {
+            "timestamp": "2026-07-29T04:00:00Z",
+            "value": 0.005
+          },
+          {
+            "timestamp": "2026-07-29T05:00:00Z",
+            "value": 0.005
+          },
+          {
+            "timestamp": "2026-07-29T06:00:00Z",
+            "value": 0.005
+          },
+          {
+            "timestamp": "2026-07-29T07:00:00Z",
+            "value": 0.006
+          },
+          {
+            "timestamp": "2026-07-29T08:00:00Z",
+            "value": 0.005
+          },
+          {
+            "timestamp": "2026-07-29T09:00:00Z",
+            "value": 0.005
+          },
+          {
+            "timestamp": "2026-07-29T10:00:00Z",
+            "value": 0.005
+          },
+          {
+            "timestamp": "2026-07-29T11:00:00Z",
+            "value": 0.006
+          },
+          {
+            "timestamp": "2026-07-29T12:00:00Z",
+            "value": 0.005
+          }
+        ]
+      },
+      {
+        "metric": "retrieval.shard_3.memory_utilization",
+        "unit": "ratio",
+        "samples": [
+          {
+            "timestamp": "2026-07-28T12:00:00Z",
+            "value": 0.72
+          },
+          {
+            "timestamp": "2026-07-28T13:00:00Z",
+            "value": 0.749
+          },
+          {
+            "timestamp": "2026-07-28T14:00:00Z",
+            "value": 0.706
+          },
+          {
+            "timestamp": "2026-07-28T15:00:00Z",
+            "value": 0.763
+          },
+          {
+            "timestamp": "2026-07-28T16:00:00Z",
+            "value": 0.698
+          },
+          {
+            "timestamp": "2026-07-28T17:00:00Z",
+            "value": 0.734
+          },
+          {
+            "timestamp": "2026-07-28T18:00:00Z",
+            "value": 0.72
+          },
+          {
+            "timestamp": "2026-07-28T19:00:00Z",
+            "value": 0.749
+          },
+          {
+            "timestamp": "2026-07-28T20:00:00Z",
+            "value": 0.706
+          },
+          {
+            "timestamp": "2026-07-28T21:00:00Z",
+            "value": 0.763
+          },
+          {
+            "timestamp": "2026-07-28T22:00:00Z",
+            "value": 0.698
+          },
+          {
+            "timestamp": "2026-07-28T23:00:00Z",
+            "value": 0.734
+          },
+          {
+            "timestamp": "2026-07-29T00:00:00Z",
+            "value": 0.72
+          },
+          {
+            "timestamp": "2026-07-29T01:00:00Z",
+            "value": 0.918
+          },
+          {
+            "timestamp": "2026-07-29T02:00:00Z",
+            "value": 0.885
+          },
+          {
+            "timestamp": "2026-07-29T03:00:00Z",
+            "value": 0.952
+          },
+          {
+            "timestamp": "2026-07-29T04:00:00Z",
+            "value": 0.858
+          },
+          {
+            "timestamp": "2026-07-29T05:00:00Z",
+            "value": 0.904
+          },
+          {
+            "timestamp": "2026-07-29T06:00:00Z",
+            "value": 0.899
+          },
+          {
+            "timestamp": "2026-07-29T07:00:00Z",
+            "value": 0.938
+          },
+          {
+            "timestamp": "2026-07-29T08:00:00Z",
+            "value": 0.866
+          },
+          {
+            "timestamp": "2026-07-29T09:00:00Z",
+            "value": 0.933
+          },
+          {
+            "timestamp": "2026-07-29T10:00:00Z",
+            "value": 0.878
+          },
+          {
+            "timestamp": "2026-07-29T11:00:00Z",
+            "value": 0.923
+          },
+          {
+            "timestamp": "2026-07-29T12:00:00Z",
+            "value": 0.88
+          }
+        ]
+      },
+      {
+        "metric": "retrieval.queries_per_second",
+        "unit": "qps",
+        "samples": [
+          {
+            "timestamp": "2026-07-28T12:00:00Z",
+            "value": 42.0
+          },
+          {
+            "timestamp": "2026-07-28T13:00:00Z",
+            "value": 43.68
+          },
+          {
+            "timestamp": "2026-07-28T14:00:00Z",
+            "value": 41.16
+          },
+          {
+            "timestamp": "2026-07-28T15:00:00Z",
+            "value": 44.52
+          },
+          {
+            "timestamp": "2026-07-28T16:00:00Z",
+            "value": 40.74
+          },
+          {
+            "timestamp": "2026-07-28T17:00:00Z",
+            "value": 42.84
+          },
+          {
+            "timestamp": "2026-07-28T18:00:00Z",
+            "value": 42.0
+          },
+          {
+            "timestamp": "2026-07-28T19:00:00Z",
+            "value": 43.68
+          },
+          {
+            "timestamp": "2026-07-28T20:00:00Z",
+            "value": 41.16
+          },
+          {
+            "timestamp": "2026-07-28T21:00:00Z",
+            "value": 44.52
+          },
+          {
+            "timestamp": "2026-07-28T22:00:00Z",
+            "value": 40.74
+          },
+          {
+            "timestamp": "2026-07-28T23:00:00Z",
+            "value": 42.84
+          },
+          {
+            "timestamp": "2026-07-29T00:00:00Z",
+            "value": 42.0
+          },
+          {
+            "timestamp": "2026-07-29T01:00:00Z",
+            "value": 43.68
+          },
+          {
+            "timestamp": "2026-07-29T02:00:00Z",
+            "value": 41.16
+          },
+          {
+            "timestamp": "2026-07-29T03:00:00Z",
+            "value": 44.52
+          },
+          {
+            "timestamp": "2026-07-29T04:00:00Z",
+            "value": 40.74
+          },
+          {
+            "timestamp": "2026-07-29T05:00:00Z",
+            "value": 42.84
+          },
+          {
+            "timestamp": "2026-07-29T06:00:00Z",
+            "value": 42.0
+          },
+          {
+            "timestamp": "2026-07-29T07:00:00Z",
+            "value": 43.68
+          },
+          {
+            "timestamp": "2026-07-29T08:00:00Z",
+            "value": 41.16
+          },
+          {
+            "timestamp": "2026-07-29T09:00:00Z",
+            "value": 44.52
+          },
+          {
+            "timestamp": "2026-07-29T10:00:00Z",
+            "value": 40.74
+          },
+          {
+            "timestamp": "2026-07-29T11:00:00Z",
+            "value": 42.84
+          },
+          {
+            "timestamp": "2026-07-29T12:00:00Z",
+            "value": 42.0
+          }
+        ]
+      }
+    ],
+    "dep_alpine_prod": [
+      {
+        "metric": "retrieval.p95_ms",
+        "unit": "ms",
+        "samples": [
+          {
+            "timestamp": "2026-07-28T12:00:00Z",
+            "value": 480.0
+          },
+          {
+            "timestamp": "2026-07-28T13:00:00Z",
+            "value": 499.2
+          },
+          {
+            "timestamp": "2026-07-28T14:00:00Z",
+            "value": 470.4
+          },
+          {
+            "timestamp": "2026-07-28T15:00:00Z",
+            "value": 508.8
+          },
+          {
+            "timestamp": "2026-07-28T16:00:00Z",
+            "value": 465.6
+          },
+          {
+            "timestamp": "2026-07-28T17:00:00Z",
+            "value": 489.6
+          },
+          {
+            "timestamp": "2026-07-28T18:00:00Z",
+            "value": 480.0
+          },
+          {
+            "timestamp": "2026-07-28T19:00:00Z",
+            "value": 499.2
+          },
+          {
+            "timestamp": "2026-07-28T20:00:00Z",
+            "value": 470.4
+          },
+          {
+            "timestamp": "2026-07-28T21:00:00Z",
+            "value": 508.8
+          },
+          {
+            "timestamp": "2026-07-28T22:00:00Z",
+            "value": 465.6
+          },
+          {
+            "timestamp": "2026-07-28T23:00:00Z",
+            "value": 489.6
+          },
+          {
+            "timestamp": "2026-07-29T00:00:00Z",
+            "value": 480.0
+          },
+          {
+            "timestamp": "2026-07-29T01:00:00Z",
+            "value": 499.2
+          },
+          {
+            "timestamp": "2026-07-29T02:00:00Z",
+            "value": 470.4
+          },
+          {
+            "timestamp": "2026-07-29T03:00:00Z",
+            "value": 508.8
+          },
+          {
+            "timestamp": "2026-07-29T04:00:00Z",
+            "value": 465.6
+          },
+          {
+            "timestamp": "2026-07-29T05:00:00Z",
+            "value": 489.6
+          },
+          {
+            "timestamp": "2026-07-29T06:00:00Z",
+            "value": 480.0
+          },
+          {
+            "timestamp": "2026-07-29T07:00:00Z",
+            "value": 499.2
+          },
+          {
+            "timestamp": "2026-07-29T08:00:00Z",
+            "value": 470.4
+          },
+          {
+            "timestamp": "2026-07-29T09:00:00Z",
+            "value": 508.8
+          },
+          {
+            "timestamp": "2026-07-29T10:00:00Z",
+            "value": 465.6
+          },
+          {
+            "timestamp": "2026-07-29T11:00:00Z",
+            "value": 489.6
+          },
+          {
+            "timestamp": "2026-07-29T12:00:00Z",
+            "value": 480.0
+          }
+        ]
+      },
+      {
+        "metric": "retrieval.error_rate",
+        "unit": "ratio",
+        "samples": [
+          {
+            "timestamp": "2026-07-28T12:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T13:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T14:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T15:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T16:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T17:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T18:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T19:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T20:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T21:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T22:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T23:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T00:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T01:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T02:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T03:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T04:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T05:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T06:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T07:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T08:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T09:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T10:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T11:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T12:00:00Z",
+            "value": 0.001
+          }
+        ]
+      }
+    ],
+    "dep_lumon_stage": [
+      {
+        "metric": "retrieval.p95_ms",
+        "unit": "ms",
+        "samples": [
+          {
+            "timestamp": "2026-07-28T12:00:00Z",
+            "value": 390.0
+          },
+          {
+            "timestamp": "2026-07-28T13:00:00Z",
+            "value": 405.6
+          },
+          {
+            "timestamp": "2026-07-28T14:00:00Z",
+            "value": 382.2
+          },
+          {
+            "timestamp": "2026-07-28T15:00:00Z",
+            "value": 413.4
+          },
+          {
+            "timestamp": "2026-07-28T16:00:00Z",
+            "value": 378.3
+          },
+          {
+            "timestamp": "2026-07-28T17:00:00Z",
+            "value": 397.8
+          },
+          {
+            "timestamp": "2026-07-28T18:00:00Z",
+            "value": 390.0
+          },
+          {
+            "timestamp": "2026-07-28T19:00:00Z",
+            "value": 405.6
+          },
+          {
+            "timestamp": "2026-07-28T20:00:00Z",
+            "value": 382.2
+          },
+          {
+            "timestamp": "2026-07-28T21:00:00Z",
+            "value": 413.4
+          },
+          {
+            "timestamp": "2026-07-28T22:00:00Z",
+            "value": 378.3
+          },
+          {
+            "timestamp": "2026-07-28T23:00:00Z",
+            "value": 397.8
+          },
+          {
+            "timestamp": "2026-07-29T00:00:00Z",
+            "value": 390.0
+          },
+          {
+            "timestamp": "2026-07-29T01:00:00Z",
+            "value": 405.6
+          },
+          {
+            "timestamp": "2026-07-29T02:00:00Z",
+            "value": 382.2
+          },
+          {
+            "timestamp": "2026-07-29T03:00:00Z",
+            "value": 413.4
+          },
+          {
+            "timestamp": "2026-07-29T04:00:00Z",
+            "value": 378.3
+          },
+          {
+            "timestamp": "2026-07-29T05:00:00Z",
+            "value": 397.8
+          },
+          {
+            "timestamp": "2026-07-29T06:00:00Z",
+            "value": 390.0
+          },
+          {
+            "timestamp": "2026-07-29T07:00:00Z",
+            "value": 405.6
+          },
+          {
+            "timestamp": "2026-07-29T08:00:00Z",
+            "value": 382.2
+          },
+          {
+            "timestamp": "2026-07-29T09:00:00Z",
+            "value": 413.4
+          },
+          {
+            "timestamp": "2026-07-29T10:00:00Z",
+            "value": 378.3
+          },
+          {
+            "timestamp": "2026-07-29T11:00:00Z",
+            "value": 397.8
+          },
+          {
+            "timestamp": "2026-07-29T12:00:00Z",
+            "value": 390.0
+          }
+        ]
+      },
+      {
+        "metric": "retrieval.error_rate",
+        "unit": "ratio",
+        "samples": [
+          {
+            "timestamp": "2026-07-28T12:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T13:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T14:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T15:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T16:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T17:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T18:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T19:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T20:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T21:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T22:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-28T23:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T00:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T01:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T02:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T03:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T04:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T05:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T06:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T07:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T08:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T09:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T10:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T11:00:00Z",
+            "value": 0.001
+          },
+          {
+            "timestamp": "2026-07-29T12:00:00Z",
+            "value": 0.001
+          }
+        ]
+      }
+    ]
+  },
+  "incidents": [
+    {
+      "source_system": "beacon",
+      "record_id": "inc_208",
+      "id": "inc_208",
+      "key": "INC-208",
+      "customer_id": "cus_northwind",
+      "deployment_id": "dep_northwind_prod",
+      "title": "Elevated retrieval latency during index compaction",
+      "severity": "SEV-2",
+      "status": "investigating",
+      "started_at": "2026-07-28T12:40:00Z",
+      "ended_at": null,
+      "commander": {
+        "id": "usr_jonah",
+        "name": "Jonah Okafor"
+      },
+      "hypothesis": "The first post-upgrade compaction increased memory pressure on shard 3, causing cache eviction and higher tail latency.",
+      "mitigation": "Compaction is paused. A controlled single-concurrency run is scheduled for 2026-07-29T22:00:00Z.",
+      "evidence": [
+        "retrieval volume remained within 4% of baseline",
+        "shard 3 memory exceeded 90%",
+        "p95 declined after compaction was paused"
+      ],
+      "visibility": "engineering",
+      "updated_at": "2026-07-29T11:50:00Z",
+      "source_url": "https://beacon.summit.test/incidents/INC-208"
+    }
+  ]
+}

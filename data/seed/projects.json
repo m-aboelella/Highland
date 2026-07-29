@@ -1,0 +1,109 @@
+{
+  "meta": {
+    "dataset_version": "2026.07.29.1",
+    "as_of": "2026-07-29T12:00:00Z"
+  },
+  "projects": [
+    {
+      "source_system": "track",
+      "record_id": "prj_search_runtime",
+      "id": "prj_search_runtime",
+      "key": "SEARCH",
+      "name": "Search Runtime",
+      "team": "engineering",
+      "visibility": "engineering",
+      "updated_at": "2026-07-29T10:30:00Z",
+      "source_url": "https://track.summit.test/projects/SEARCH"
+    },
+    {
+      "source_system": "track",
+      "record_id": "prj_customer_success",
+      "id": "prj_customer_success",
+      "key": "CUST",
+      "name": "Customer Success",
+      "team": "customer-success",
+      "visibility": "customer-success",
+      "updated_at": "2026-07-29T10:30:00Z",
+      "source_url": "https://track.summit.test/projects/CUST"
+    }
+  ],
+  "issues": [
+    {
+      "source_system": "track",
+      "record_id": "iss_482",
+      "id": "iss_482",
+      "key": "SEARCH-482",
+      "project_id": "prj_search_runtime",
+      "customer_id": "cus_northwind",
+      "title": "Limit compaction memory on large existing shards",
+      "description": "Add a configurable memory ceiling and validate the change on private-cloud clusters with shards larger than 1.5 TB.",
+      "status": "in_progress",
+      "priority": "high",
+      "assignee": {
+        "id": "usr_lee",
+        "name": "Lee Park"
+      },
+      "due_at": "2026-08-04T17:00:00Z",
+      "labels": [
+        "performance",
+        "compaction",
+        "private-cloud"
+      ],
+      "visibility": "engineering",
+      "created_at": "2026-07-28T16:00:00Z",
+      "updated_at": "2026-07-29T10:25:00Z",
+      "source_url": "https://track.summit.test/issues/SEARCH-482"
+    },
+    {
+      "source_system": "track",
+      "record_id": "iss_91",
+      "id": "iss_91",
+      "key": "CUST-91",
+      "project_id": "prj_customer_success",
+      "customer_id": "cus_northwind",
+      "title": "Deliver Northwind capacity review",
+      "description": "Summarize current headroom, expected Q4 ingestion, and recommended shard plan. Share a customer-safe version before August 7.",
+      "status": "todo",
+      "priority": "high",
+      "assignee": {
+        "id": "usr_jonah",
+        "name": "Jonah Okafor"
+      },
+      "due_at": "2026-08-07T17:00:00Z",
+      "labels": [
+        "customer-commitment",
+        "renewal"
+      ],
+      "visibility": "customer-success",
+      "created_at": "2026-07-23T10:40:00Z",
+      "updated_at": "2026-07-23T10:40:00Z",
+      "source_url": "https://track.summit.test/issues/CUST-91"
+    },
+    {
+      "source_system": "track",
+      "record_id": "iss_92",
+      "id": "iss_92",
+      "key": "CUST-92",
+      "project_id": "prj_customer_success",
+      "customer_id": "cus_northwind",
+      "title": "Agree retrieval latency SLO with Northwind",
+      "description": "Draft an SLO proposal for review during renewal planning.",
+      "status": "todo",
+      "priority": "medium",
+      "assignee": {
+        "id": "usr_maya",
+        "name": "Maya Chen"
+      },
+      "due_at": "2026-08-14T17:00:00Z",
+      "labels": [
+        "customer-commitment",
+        "slo"
+      ],
+      "visibility": "customer-success",
+      "created_at": "2026-07-23T10:45:00Z",
+      "updated_at": "2026-07-23T10:45:00Z",
+      "source_url": "https://track.summit.test/issues/CUST-92"
+    }
+  ],
+  "idempotency": {}
+}

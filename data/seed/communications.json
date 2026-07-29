@@ -1,0 +1,166 @@
+{
+  "meta": {
+    "dataset_version": "2026.07.29.1",
+    "as_of": "2026-07-29T12:00:00Z"
+  },
+  "messages": [
+    {
+      "source_system": "pulse",
+      "record_id": "msg_7001",
+      "id": "msg_7001",
+      "customer_id": "cus_northwind",
+      "channel": "support-northwind",
+      "thread_id": "thr_latency_northwind",
+      "author": {
+        "id": "usr_priya",
+        "name": "Priya Nair"
+      },
+      "created_at": "2026-07-28T14:05:00Z",
+      "text": "I reproduced the latency. Traffic is normal, but shard 3 memory climbs while compaction runs. I have paused it and linked Beacon incident INC-208.",
+      "visibility": "support",
+      "updated_at": "2026-07-28T14:05:00Z",
+      "source_url": "https://pulse.summit.test/channels/support-northwind/msg_7001"
+    },
+    {
+      "source_system": "pulse",
+      "record_id": "msg_7002",
+      "id": "msg_7002",
+      "customer_id": "cus_northwind",
+      "channel": "support-northwind",
+      "thread_id": "thr_latency_northwind",
+      "author": {
+        "id": "usr_jonah",
+        "name": "Jonah Okafor"
+      },
+      "created_at": "2026-07-28T14:22:00Z",
+      "text": "This resembles the 4.18.2 first-compaction limitation, but we should call it a hypothesis until tonight's controlled run. Please avoid telling Northwind that the upgrade is definitively the root cause.",
+      "visibility": "support",
+      "updated_at": "2026-07-28T14:22:00Z",
+      "source_url": "https://pulse.summit.test/channels/support-northwind/msg_7002"
+    },
+    {
+      "source_system": "pulse",
+      "record_id": "msg_7003",
+      "id": "msg_7003",
+      "customer_id": "cus_northwind",
+      "channel": "customer-success",
+      "thread_id": "thr_northwind_meeting",
+      "author": {
+        "id": "usr_maya",
+        "name": "Maya Chen"
+      },
+      "created_at": "2026-07-29T09:02:00Z",
+      "text": "Tomorrow Elena will want to know whether analysts are still affected, what we know versus suspect, and whether the October renewal timeline is at risk. We also owe Tomas a date for the capacity review.",
+      "visibility": "customer-success",
+      "updated_at": "2026-07-29T09:02:00Z",
+      "source_url": "https://pulse.summit.test/channels/customer-success/msg_7003"
+    },
+    {
+      "source_system": "pulse",
+      "record_id": "msg_7004",
+      "id": "msg_7004",
+      "customer_id": "cus_northwind",
+      "channel": "engineering-search",
+      "thread_id": "thr_latency_northwind",
+      "author": {
+        "id": "usr_lee",
+        "name": "Lee Park"
+      },
+      "created_at": "2026-07-29T10:40:00Z",
+      "text": "Patch 4.18.3 can cap compaction memory, but it has not passed private-cloud qualification. The safe near-term mitigation is concurrency one plus a capacity review.",
+      "visibility": "engineering",
+      "updated_at": "2026-07-29T10:40:00Z",
+      "source_url": "https://pulse.summit.test/channels/engineering-search/msg_7004"
+    },
+    {
+      "source_system": "pulse",
+      "record_id": "msg_7010",
+      "id": "msg_7010",
+      "customer_id": "cus_alpine",
+      "channel": "customer-success",
+      "thread_id": "thr_alpine_expansion",
+      "author": {
+        "id": "usr_maya",
+        "name": "Maya Chen"
+      },
+      "created_at": "2026-07-28T17:00:00Z",
+      "text": "Alpine wants to add two regions next quarter; current search health is strong.",
+      "visibility": "customer-success",
+      "updated_at": "2026-07-28T17:00:00Z",
+      "source_url": "https://pulse.summit.test/channels/customer-success/msg_7010"
+    }
+  ],
+  "meetings": [
+    {
+      "source_system": "pulse",
+      "record_id": "mtg_northwind_0730",
+      "id": "mtg_northwind_0730",
+      "customer_id": "cus_northwind",
+      "title": "Northwind weekly deployment review",
+      "starts_at": "2026-07-30T09:30:00Z",
+      "duration_minutes": 45,
+      "attendees": [
+        {
+          "name": "Maya Chen",
+          "organization": "Summit Software"
+        },
+        {
+          "name": "Jonah Okafor",
+          "organization": "Summit Software"
+        },
+        {
+          "name": "Elena Varga",
+          "organization": "Northwind Bank"
+        },
+        {
+          "name": "Tomas Reed",
+          "organization": "Northwind Bank"
+        }
+      ],
+      "agenda": [
+        "Production service health",
+        "Latency incident and mitigation",
+        "Capacity review",
+        "Q4 ingestion forecast and renewal readiness"
+      ],
+      "notes": null,
+      "visibility": "customer-success",
+      "updated_at": "2026-07-29T09:00:00Z",
+      "source_url": "https://pulse.summit.test/meetings/mtg_northwind_0730"
+    },
+    {
+      "source_system": "pulse",
+      "record_id": "mtg_northwind_0723",
+      "id": "mtg_northwind_0723",
+      "customer_id": "cus_northwind",
+      "title": "Northwind weekly deployment review",
+      "starts_at": "2026-07-23T09:30:00Z",
+      "duration_minutes": 45,
+      "attendees": [],
+      "agenda": [],
+      "notes": "Northwind approved the 4.18.2 maintenance window. Tomas asked Summit to quantify headroom before Q4. Elena reiterated that stable response time is a renewal requirement.",
+      "visibility": "customer-success",
+      "updated_at": "2026-07-23T10:30:00Z",
+      "source_url": "https://pulse.summit.test/meetings/mtg_northwind_0723"
+    }
+  ],
+  "customer_updates": [
+    {
+      "source_system": "pulse",
+      "record_id": "upd_northwind_0728",
+      "id": "upd_northwind_0728",
+      "customer_id": "cus_northwind",
+      "channel": "northwind-operations",
+      "author": {
+        "id": "usr_priya",
+        "name": "Priya Nair"
+      },
+      "message": "We are investigating elevated search latency and have paused background maintenance while we validate a mitigation. The next update is scheduled for 15:00 UTC.",
+      "created_at": "2026-07-28T14:10:00Z",
+      "visibility": "external",
+      "updated_at": "2026-07-28T14:10:00Z",
+      "source_url": "https://pulse.summit.test/customer-updates/upd_northwind_0728"
+    }
+  ],
+  "idempotency": {}
+}
