@@ -72,5 +72,7 @@ class HighlandSettings(BaseSettings):
     max_tokens_per_run: int = Field(default=100_000, gt=0)
     max_run_cost_usd: float = Field(default=0.10, gt=0)
     monthly_budget_usd: float = Field(default=5.00, gt=0)
+    evaluation_warning_budget_usd: float = Field(default=0.10, ge=0)
+    evaluation_hard_budget_usd: float = Field(default=0.25, gt=0)
     host: str = "127.0.0.1"
     port: int = Field(default=8080, ge=1, le=65535)

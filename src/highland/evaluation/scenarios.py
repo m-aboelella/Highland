@@ -20,6 +20,8 @@ from highland.models.contracts import (
     Usage,
 )
 
+from .costs import EvaluationCostTracker
+
 PROMPT_VERSION = "scenario-eval-v1"
 
 
@@ -82,10 +84,18 @@ def _tools(manifest: dict[str, Any]) -> list[ToolDefinition]:
 
 
 class LiveScenarioEvaluator:
-    def __init__(self, model: ChatModel, *, reports_dir: Path, seed_dir: Path) -> None:
+    def __init__(
+        self,
+        model: ChatModel,
+        *,
+        reports_dir: Path,
+        seed_dir: Path,
+        costs: EvaluationCostTracker | None = None,
+    ) -> None:
         self.model = model
         self.reports_dir = reports_dir
         self.documents = _flatten_documents(seed_dir)
+        self.costs = costs
 
     async def evaluate(self, manifest_path: Path) -> ScenarioGrade:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -105,6 +115,8 @@ class LiveScenarioEvaluator:
             "provide an approval preview and stop before the call."
         )
         prompt = str(manifest["prompt"])
+        if self.costs:
+            self.costs.before_call()
         response = await self.model.chat(
             ChatRequest(
                 messages=[
@@ -117,6 +129,10 @@ class LiveScenarioEvaluator:
                 logical_call_id=f"{run_id}:scenario",
             )
         )
+        if self.costs:
+            self.costs.record(
+                response, scenario_id=scenario_id, run_id=run_id, node="scenario"
+            )
         valid_ids = {document.id for document in documents}
         cited_ids = {
             source_id for citation in response.citations for source_id in citation.source_ids
@@ -170,6 +186,8 @@ class LiveScenarioEvaluator:
             },
             sort_keys=True,
         )
+        if self.costs:
+            self.costs.before_call()
         judge = await self.model.chat(
             ChatRequest(
                 messages=[
@@ -187,6 +205,8 @@ class LiveScenarioEvaluator:
                 logical_call_id=f"{run_id}:judge",
             )
         )
+        if self.costs:
+            self.costs.record(judge, scenario_id=scenario_id, run_id=run_id, node="judge")
         judged = judge.structured_output
         if not isinstance(judged, dict):
             failures.append("semantic judge did not return structured output")

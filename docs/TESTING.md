@@ -50,3 +50,18 @@ Run the deterministic failure matrix, retry, approval-restart, corrupted-log,
 and trace replay checks with `pytest tests/reliability`. Recovery behavior and
 the read-only replay versus fresh linked re-run distinction are documented in
 [Failure recovery and trace replay](RELIABILITY.md).
+
+Live evaluation aggregates model calls, tokens, rerank units, estimated
+dollars, and latency by scenario, run, node, and model. Configure
+`HIGHLAND_EVALUATION_WARNING_BUDGET_USD` and
+`HIGHLAND_EVALUATION_HARD_BUDGET_USD`; reaching the hard boundary aborts before
+the next call. Pass `--baseline path/to/cost-report.json` to compare against
+stored estimates without re-pricing historical usage. Unknown prices remain
+visible, and reports contain hashes and usage metadata rather than prompts or
+keys.
+
+With the repository's dated price configuration, the two Chat calls in each
+showcase evaluation (scenario plus semantic judge) currently estimate to
+approximately `$0.00`, so all three are approximately `$0.00`. This is a dated
+configuration value, not a promise about Cohere pricing; update
+`config/model_prices.json` for the applicable commercial agreement.

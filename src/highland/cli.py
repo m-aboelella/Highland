@@ -10,8 +10,10 @@ from pathlib import Path
 import uvicorn
 
 from .doctor import inspect_environment
+from .evaluation.costs import EvaluationCostTracker
 from .evaluation.retrieval import evaluate_retrieval
 from .evaluation.scenarios import LiveScenarioEvaluator
+from .models.pricing import PriceCatalog
 from .models.provider import build_model_provider
 from .retrieval.ingestion import BackfillService
 from .retrieval.sources import INDEXABLE_SOURCES, MCPSourceReader
@@ -51,9 +53,11 @@ def build_parser() -> argparse.ArgumentParser:
         "scenario", help="Run one explicitly opted-in Cohere scenario evaluation."
     )
     scenario.add_argument("scenario_id", help="Scenario filename without .json or manifest ID.")
-    evaluation_commands.add_parser(
+    scenario.add_argument("--baseline", type=Path, help="Stored cost report to compare.")
+    all_scenarios = evaluation_commands.add_parser(
         "all", help="Run all explicitly opted-in Cohere scenario evaluations."
     )
+    all_scenarios.add_argument("--baseline", type=Path, help="Stored cost report to compare.")
     return parser
 
 
@@ -191,10 +195,16 @@ def main() -> None:
                 raise SystemExit(f"unknown scenario: {requested}")
         else:
             paths = sorted(scenarios_dir.glob("*.json"))
+        costs = EvaluationCostTracker(
+            PriceCatalog.load(settings.model_price_config),
+            warning_budget_usd=settings.evaluation_warning_budget_usd,
+            hard_budget_usd=settings.evaluation_hard_budget_usd,
+        )
         evaluator = LiveScenarioEvaluator(
             build_model_provider(settings).chat,
             reports_dir=settings.workspace_dir / "reports" / "scenarios",
             seed_dir=Path(__file__).resolve().parents[2] / "data" / "seed",
+            costs=costs,
         )
         grades = [asyncio.run(evaluator.evaluate(path)) for path in paths]
         for grade in grades:
@@ -202,6 +212,14 @@ def main() -> None:
                 f"model-backed scenario={grade.scenario_id} "
                 f"result={'PASS' if grade.passed else 'FAIL'}"
             )
+        cost_report = costs.write(
+            settings.workspace_dir / "reports" / "scenarios" / "cost-report.json",
+            baseline=args.baseline,
+        )
+        print(
+            f"evaluation_cost=${cost_report.known_cost_usd:.6f} "
+            f"unknown_price_calls={cost_report.unknown_price_calls}"
+        )
         if not all(grade.passed for grade in grades):
             raise SystemExit(1)
     else:

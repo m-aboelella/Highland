@@ -226,7 +226,7 @@ User
 | M4 — Discover workspace | ✅ Implemented | 6/6 | Grounded search/chat and evidence UI |
 | M5 — Create artifacts | ✅ Implemented | 5/5 | Persistent editable cited outputs |
 | M6 — Automate workflows | ✅ Implemented | 7/7 | Small model-assisted workflow system |
-| M7 — Evaluation and reliability | 🟨 Partial | 4/5 | Deterministic and live-model evidence |
+| M7 — Evaluation and reliability | ✅ Implemented | 5/5 | Deterministic and live-model evidence |
 | M8 — Self-hosted learning experience | ⬜ Not started | 0/4 | One-command stack and teaching path |
 
 ---
@@ -1587,7 +1587,7 @@ Validate the scheduled weekly customer health workflow
 
 # M7 — Evaluation and reliability
 
-**Milestone status:** 🟨 Partial
+**Milestone status:** ✅ Implemented
 **Milestone outcome:** Learners can distinguish deterministic harness
 correctness from probabilistic live-model quality and reproduce failures.
 
@@ -1726,8 +1726,8 @@ Test failure recovery retries and read-only trace replay
 
 ## E7.5 — Cost reports and regression budgets
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E1.5, E7.3
 
 Scope:
