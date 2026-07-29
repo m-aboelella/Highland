@@ -2,11 +2,30 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 
-type TraceEvent = {
+export type TraceEvent = {
   id: number;
   type: string;
   timestamp: string;
   payload: Record<string, unknown>;
+};
+
+type Citation = {
+  start: number;
+  end: number;
+  source_ids: string[];
+};
+
+type Evidence = {
+  id: string;
+  source_id: string;
+  title: string;
+  text: string;
+  source_system: string;
+  source_type: string;
+  source_url: string;
+  customer_id?: string;
+  updated_at: string;
+  location: { section: string };
 };
 
 const API = process.env.NEXT_PUBLIC_HIGHLAND_API_URL ?? "http://127.0.0.1:8080";
@@ -28,11 +47,81 @@ export function TraceTimeline({ events }: { events: TraceEvent[] }) {
   );
 }
 
+export function CitedAnswer({
+  answer,
+  citations,
+  onSelect,
+}: {
+  answer: string;
+  citations: Citation[];
+  onSelect: (chunkId: string) => void;
+}) {
+  if (!citations.length) return <mark className="unsupported">{answer}</mark>;
+  const ordered = [...citations].sort((left, right) => left.start - right.start);
+  let cursor = 0;
+  return (
+    <>
+      {ordered.map((citation, index) => {
+        const prefix = answer.slice(cursor, citation.start);
+        const claim = answer.slice(citation.start, citation.end);
+        cursor = citation.end;
+        return (
+          <span key={`${citation.start}-${index}`}>
+            {prefix && <mark className="unsupported">{prefix}</mark>}
+            <span className="supported">{claim}</span>
+            <button
+              className="citation-marker"
+              onClick={() => onSelect(citation.source_ids[0])}
+              type="button"
+            >
+              {index + 1}
+            </button>
+          </span>
+        );
+      })}
+      {cursor < answer.length && <mark className="unsupported">{answer.slice(cursor)}</mark>}
+    </>
+  );
+}
+
+export function EvidencePanel({
+  evidence,
+  selectedId,
+  refreshed,
+}: {
+  evidence: Evidence[];
+  selectedId?: string;
+  refreshed: boolean;
+}) {
+  const selected = evidence.find((item) => item.id === selectedId) ?? evidence[0];
+  if (!selected) return null;
+  return (
+    <aside className="evidence-panel" aria-label="Evidence">
+      <p className="eyebrow">Why this answer?</p>
+      <h2>{selected.title}</h2>
+      <blockquote>{selected.text}</blockquote>
+      <dl>
+        <dt>Section</dt><dd>{selected.location.section}</dd>
+        <dt>Source</dt><dd>{selected.source_system} · {selected.source_id}</dd>
+        <dt>Type</dt><dd>{selected.source_type}</dd>
+        <dt>Customer</dt><dd>{selected.customer_id ?? "Shared"}</dd>
+        <dt>Updated</dt><dd>{new Date(selected.updated_at).toLocaleString()}</dd>
+      </dl>
+      {refreshed && <p className="fresh-badge">Mutable fact refreshed through MCP</p>}
+      <a href={selected.source_url}>Open canonical source</a>
+      <p className="diagnostic-note">
+        Selected because it passed the visible filters and retrieval/rerank stages shown in the trace.
+      </p>
+    </aside>
+  );
+}
+
 export function DiscoverWorkspace() {
   const [conversationId, setConversationId] = useState<string>();
   const [runId, setRunId] = useState<string>();
   const [events, setEvents] = useState<TraceEvent[]>([]);
   const [answer, setAnswer] = useState("");
+  const [selectedEvidence, setSelectedEvidence] = useState<string>();
   const source = useRef<EventSource>(null);
 
   useEffect(() => {
@@ -63,6 +152,8 @@ export function DiscoverWorkspace() {
     setAnswer("");
     const data = new FormData(event.currentTarget);
     const content = String(data.get("question") ?? "");
+    const customerId = String(data.get("customer_id") ?? "").trim();
+    const sourceTypes = String(data.get("source_type") ?? "").trim();
     let conversation = conversationId;
     if (!conversation) {
       const created = await fetch(`${API}/conversations`, { method: "POST" });
@@ -72,10 +163,25 @@ export function DiscoverWorkspace() {
     const response = await fetch(`${API}/conversations/${conversation}/runs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({
+        content,
+        filters: {
+          customer_id: customerId || null,
+          source_types: sourceTypes ? [sourceTypes] : [],
+          allowed_visibilities: ["internal", "shared"],
+        },
+      }),
     });
     setRunId((await response.json()).run_id);
   }
+
+  const citations = events
+    .filter((event) => event.type === "citation")
+    .map((event) => event.payload as unknown as Citation);
+  const retrieval = events.find((event) => event.type === "retrieval");
+  const evidence = ((retrieval?.payload.results as Array<{ chunk: Evidence }> | undefined) ?? [])
+    .map((item) => item.chunk);
+  const refreshed = events.some((event) => event.type === "tool_result");
 
   async function cancel() {
     if (runId) await fetch(`${API}/runs/${runId}/cancel`, { method: "POST" });
@@ -89,12 +195,29 @@ export function DiscoverWorkspace() {
       <form className="prompt" onSubmit={submit}>
         <label htmlFor="question">Ask Highland</label>
         <textarea id="question" name="question" placeholder="Prepare me for the Northwind customer meeting…" />
+        <fieldset className="filters">
+          <legend>Current filters</legend>
+          <label>Customer <input name="customer_id" placeholder="cus_northwind" /></label>
+          <label>Source type <input name="source_type" placeholder="runbook" /></label>
+          <span>Visibility: internal + shared</span>
+        </fieldset>
         <div className="run-actions">
           {runId && <button className="secondary" onClick={cancel} type="button">Cancel run</button>}
           <button type="submit">Start discovery</button>
         </div>
       </form>
-      {answer && <article className="streaming-answer" aria-live="polite">{answer}</article>}
+      {answer && (
+        <div className="answer-layout">
+          <article className="streaming-answer" aria-live="polite">
+            <CitedAnswer answer={answer} citations={citations} onSelect={setSelectedEvidence} />
+          </article>
+          <EvidencePanel
+            evidence={evidence}
+            selectedId={selectedEvidence}
+            refreshed={refreshed}
+          />
+        </div>
+      )}
       {events.length > 0 && <TraceTimeline events={events} />}
     </section>
   );

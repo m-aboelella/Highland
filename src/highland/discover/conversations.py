@@ -20,6 +20,15 @@ class SourceReference(ConversationModel):
     chunk_id: str
     source_id: str
     source_url: str
+    source_system: str | None = None
+    source_type: str | None = None
+    title: str | None = None
+    passage: str | None = None
+    section: str | None = None
+    updated_at: datetime | None = None
+    customer_id: str | None = None
+    score: float | None = None
+    refreshed_through_mcp: bool = False
 
 
 class ConversationMessage(ConversationModel):

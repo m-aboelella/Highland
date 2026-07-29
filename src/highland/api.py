@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .discover.conversations import ConversationStore
-from .discover.service import ChatRequest, DiscoverService, SearchRequest
+from .discover.service import ChatRequest, DiscoverFilters, DiscoverService, SearchRequest
 from .models.provider import ModelProvider, build_model_provider
 from .retrieval.citations import CitationResolver
 from .retrieval.sources import MCPSourceReader
@@ -35,6 +35,10 @@ class RenameConversationRequest(ApiModel):
 
 class CreateMessageRequest(ApiModel):
     content: str = Field(min_length=1, max_length=100_000)
+
+
+class CreateRunRequest(CreateMessageRequest):
+    filters: DiscoverFilters = Field(default_factory=DiscoverFilters)
 
 
 class CancelRunRequest(ApiModel):
@@ -184,7 +188,7 @@ def create_app(
     @app.post("/conversations/{conversation_id}/runs", status_code=status.HTTP_202_ACCEPTED)
     async def create_run(
         conversation_id: str,
-        request: CreateMessageRequest,
+        request: CreateRunRequest,
         background_tasks: BackgroundTasks,
     ) -> dict[str, object]:
         run_id = f"run_{uuid4().hex}"
@@ -204,7 +208,11 @@ def create_app(
         )
         background_tasks.add_task(
             _run_discovery,
-            ChatRequest(conversation_id=conversation_id, query=request.content),
+            ChatRequest(
+                conversation_id=conversation_id,
+                query=request.content,
+                filters=request.filters,
+            ),
             run_id,
         )
         return {
@@ -305,6 +313,39 @@ def create_app(
     @app.get("/runs/{run_id}/trace")
     async def run_trace(run_id: str) -> list[dict[str, object]]:
         return [event.model_dump(mode="json") for event in run_events.replay(run_id)]
+
+    @app.get("/runs/{run_id}/evidence")
+    async def run_evidence(run_id: str) -> dict[str, object]:
+        events = run_events.replay(run_id)
+        retrieval = next(
+            (event.payload for event in events if event.type.value == "retrieval"),
+            {},
+        )
+        citations = [
+            event.payload for event in events if event.type.value == "citation"
+        ]
+        source_ids = {
+            source_id
+            for citation in citations
+            for source_id in citation.get("source_ids", [])
+            if isinstance(source_id, str)
+        }
+        resolver = CitationResolver(workspace.indexes / "search")
+        evidence = []
+        for chunk_id in sorted(source_ids):
+            chunk = resolver.get_chunk(chunk_id)
+            if chunk is not None:
+                evidence.append(chunk.model_dump(mode="json"))
+        refreshed = any(event.type.value == "tool_result" for event in events)
+        return {
+            "run_id": run_id,
+            "filters": retrieval.get("filters", {}),
+            "citations": citations,
+            "evidence": evidence,
+            "diagnostics": retrieval.get("diagnostics", []),
+            "timings": retrieval.get("timings", {}),
+            "refreshed_through_mcp": refreshed,
+        }
 
     @app.get("/runs/{run_id}/events")
     async def stream_run_events(

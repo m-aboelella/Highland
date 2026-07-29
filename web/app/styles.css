@@ -103,8 +103,25 @@ h1 { max-width: 740px; margin: 0 0 18px; font: 500 clamp(35px, 6vw, 72px)/1.02 G
 }
 button { justify-self: end; padding: 10px 16px; color: #10231f; background: var(--mint); border: 0; border-radius: 7px; font-weight: 750; }
 .run-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.filters { display: flex; align-items: end; gap: 12px; padding: 10px; border: 1px solid var(--line); color: var(--muted); }
+.filters legend { color: var(--gold); font-size: 11px; }
+.filters label { display: grid; gap: 4px; font-size: 11px; }
+.filters input { padding: 7px; color: var(--ink); background: #0b1917; border: 1px solid var(--line); }
 .secondary { color: var(--ink); background: transparent; border: 1px solid var(--line); }
+.answer-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); gap: 16px; align-items: start; }
 .streaming-answer { margin-top: 28px; padding: 22px; background: var(--panel); border-left: 3px solid var(--mint); }
+.unsupported { color: #d3b4ad; background: #4a2823; }
+.supported { text-decoration: underline; text-decoration-color: var(--mint); text-underline-offset: 3px; }
+.citation-marker { margin: 0 3px; padding: 1px 5px; color: #10231f; font-size: 10px; vertical-align: super; }
+.evidence-panel { margin-top: 28px; padding: 18px; background: #0b1917; border: 1px solid var(--line); border-radius: 10px; }
+.evidence-panel h2 { font: 500 20px Georgia, serif; }
+.evidence-panel blockquote { margin: 14px 0; padding-left: 12px; color: var(--muted); border-left: 2px solid var(--gold); }
+.evidence-panel dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 12px; }
+.evidence-panel dt { color: var(--muted); }
+.evidence-panel dd { margin: 0; }
+.evidence-panel a { color: var(--mint); }
+.fresh-badge { color: var(--mint); font-size: 11px; }
+.diagnostic-note { color: var(--muted); font-size: 11px; }
 .trace { display: grid; gap: 8px; margin: 24px 0 0; padding: 0; list-style: none; }
 .trace li { display: grid; grid-template-columns: 1fr auto; padding: 11px 14px; color: var(--muted); background: #0b1917; border: 1px solid var(--line); border-radius: 8px; }
 .trace span { color: var(--ink); text-transform: capitalize; }
@@ -123,4 +140,6 @@ button { justify-self: end; padding: 10px 16px; color: #10231f; background: var(
   .local-note { display: none; }
   main { width: min(100% - 30px, 980px); }
   .agent-grid { grid-template-columns: 1fr; }
+  .answer-layout { grid-template-columns: 1fr; }
+  .filters { align-items: stretch; flex-direction: column; }
 }

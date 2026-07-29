@@ -131,6 +131,7 @@ class DiscoverService:
                         "chunk_id": result.chunk.id,
                         "source_id": result.chunk.source_id,
                         "score": result.score,
+                        "chunk": result.chunk.model_dump(mode="json"),
                     }
                     for result in retrieval.results
                 ],
@@ -177,6 +178,14 @@ class DiscoverService:
                 chunk_id=result.chunk.id,
                 source_id=result.chunk.source_id,
                 source_url=result.chunk.source_url,
+                source_system=result.chunk.source_system,
+                source_type=result.chunk.source_type,
+                title=result.chunk.title,
+                passage=result.chunk.text,
+                section=result.chunk.location.section,
+                updated_at=result.chunk.updated_at,
+                customer_id=result.chunk.customer_id,
+                score=result.score,
             )
             for result in retrieval.results
         }
