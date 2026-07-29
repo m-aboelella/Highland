@@ -10,7 +10,7 @@ from highland_mocks.mcp_server import build_mcp
     ("connector", "expected"),
     [
         ("crm", {"list_customers", "get_customer"}),
-        ("knowledge", {"search_documents", "get_document"}),
+        ("knowledge", {"list_documents", "search_documents", "get_document"}),
         (
             "support",
             {"list_customer_tickets", "get_ticket", "create_ticket"},
@@ -28,6 +28,7 @@ from highland_mocks.mcp_server import build_mcp
             "communications",
             {
                 "search_messages",
+                "list_messages",
                 "list_customer_meetings",
                 "post_customer_update",
             },

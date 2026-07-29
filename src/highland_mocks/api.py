@@ -456,6 +456,12 @@ def _add_observability_routes(app: FastAPI) -> None:
 
 
 def _add_communications_routes(app: FastAPI) -> None:
+    @app.get("/messages")
+    def list_messages(customer_id: str | None = None) -> dict[str, Any]:
+        records = _filtered(app.state.store.read()["messages"], customer_id=customer_id)
+        records.sort(key=lambda message: message["created_at"])
+        return {"items": records, "count": len(records)}
+
     @app.get("/messages/search")
     def search_messages(
         query: Annotated[str, Query(min_length=2)],

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 from datetime import UTC, datetime
 
 import uvicorn
 
 from .doctor import inspect_environment
+from .retrieval.ingestion import BackfillService
+from .retrieval.sources import INDEXABLE_SOURCES, MCPSourceReader
 from .settings import HighlandSettings
 from .storage.cost_ledger import CostLedger, UsageSummary
 from .workspace import WorkspacePaths
@@ -24,6 +27,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     usage = subparsers.add_parser("usage", help="Summarize model usage and estimated cost.")
     usage.add_argument("--run-id", help="Run to summarize; defaults to the latest ledger run.")
+    index = subparsers.add_parser("index", help="Build and inspect the local retrieval index.")
+    index_commands = index.add_subparsers(dest="index_command", required=True)
+    backfill = index_commands.add_parser("backfill", help="Backfill searchable source content.")
+    selection = backfill.add_mutually_exclusive_group(required=True)
+    selection.add_argument("--source", choices=INDEXABLE_SOURCES, action="append")
+    selection.add_argument("--all", action="store_true")
     return parser
 
 
@@ -81,6 +90,22 @@ def main() -> None:
         _print_usage(run)
         print(f"Calendar month: {today:%Y-%m}")
         _print_usage(month)
+    elif args.command == "index" and args.index_command == "backfill":
+        workspace = WorkspacePaths.from_root(settings.workspace_dir)
+        workspace.ensure()
+        reader = MCPSourceReader(
+            settings.connector_commands,
+            timeout_seconds=settings.connector_timeout_seconds,
+        )
+        service = BackfillService(
+            reader,
+            index_dir=workspace.indexes / "search",
+            reports_dir=workspace.synchronization,
+        )
+        result = asyncio.run(service.backfill(None if args.all else args.source))
+        print(result.model_dump_json(indent=2))
+        if not result.promoted:
+            raise SystemExit(1)
     else:
         raise AssertionError(f"Unhandled command: {args.command}")
 

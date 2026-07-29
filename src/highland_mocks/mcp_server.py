@@ -102,6 +102,22 @@ def build_mcp(connector: str) -> FastMCP:
     elif connector == "knowledge":
 
         @mcp.tool()
+        def list_documents(
+            customer_id: str | None = None,
+            document_type: str | None = None,
+            team: str | None = None,
+        ) -> dict[str, Any]:
+            """Enumerate canonical documents available for indexing."""
+            return client.get(
+                "/documents",
+                {
+                    "customer_id": customer_id,
+                    "document_type": document_type,
+                    "team": team,
+                },
+            )
+
+        @mcp.tool()
         def search_documents(
             query: str,
             customer_id: str | None = None,
@@ -130,7 +146,7 @@ def build_mcp(connector: str) -> FastMCP:
 
         @mcp.tool()
         def list_customer_tickets(
-            customer_id: str,
+            customer_id: str | None = None,
             status: str | None = None,
             priority: str | None = None,
         ) -> dict[str, Any]:
@@ -200,13 +216,18 @@ def build_mcp(connector: str) -> FastMCP:
 
         @mcp.tool()
         def list_incidents(
-            customer_id: str,
+            customer_id: str | None = None,
             status: str | None = None,
         ) -> dict[str, Any]:
             """List operational incidents for a customer."""
             return client.get("/incidents", {"customer_id": customer_id, "status": status})
 
     elif connector == "communications":
+
+        @mcp.tool()
+        def list_messages(customer_id: str | None = None) -> dict[str, Any]:
+            """Enumerate messages eligible for the local search index."""
+            return client.get("/messages", {"customer_id": customer_id})
 
         @mcp.tool()
         def search_messages(
@@ -228,7 +249,7 @@ def build_mcp(connector: str) -> FastMCP:
 
         @mcp.tool()
         def list_customer_meetings(
-            customer_id: str,
+            customer_id: str | None = None,
             starts_after: str | None = None,
             starts_before: str | None = None,
         ) -> dict[str, Any]:

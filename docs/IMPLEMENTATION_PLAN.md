@@ -221,7 +221,7 @@ User
 | --- | --- | ---: | --- |
 | M0 — Mock enterprise foundation | ✅ Implemented | 5/5 | Realistic local systems and MCP tools |
 | M1 — Application and model-provider foundation | ✅ Implemented | 5/5 | Testable Cohere boundary and local state |
-| M2 — Ingestion and hybrid retrieval | 🟨 Partial | 1/6 | Backfill, incremental sync, FAISS, reranking |
+| M2 — Ingestion and hybrid retrieval | 🟨 Partial | 2/6 | Backfill, incremental sync, FAISS, reranking |
 | M3 — Agent runtime and MCP gateway | ⬜ Not started | 0/6 | Direct model/tool loop, policy, approvals, traces |
 | M4 — Discover workspace | ⬜ Not started | 0/6 | Grounded search/chat and evidence UI |
 | M5 — Create artifacts | ⬜ Not started | 0/5 | Persistent editable cited outputs |
@@ -563,8 +563,8 @@ Define retrieval chunks provenance and sync manifests
 
 ## E2.2 — Source backfill through MCP
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E2.1, E3.1
 
 Scope:
