@@ -132,6 +132,22 @@ button { justify-self: end; padding: 10px 16px; color: #10231f; background: var(
 .agent-card { padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
 .agent-card h2 { margin: 0 0 8px; color: var(--gold); font-size: 12px; text-transform: capitalize; }
 .agent-card p { margin: 0; color: var(--muted); }
+.artifact-editor { margin-top: 28px; padding: 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+.artifact-editor > header { display: flex; justify-content: space-between; gap: 18px; }
+.artifact-editor h2 { margin: 0; font: 500 30px Georgia, serif; }
+.artifact-editor textarea { width: 100%; min-height: 430px; margin-top: 16px; padding: 18px; resize: vertical; color: var(--ink); background: #0b1917; border: 1px solid var(--line); font: 14px/1.6 ui-monospace, monospace; }
+.editor-actions, .artifact-tools, .citation-insert { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; }
+.editor-actions span, .provenance { color: var(--muted); font-size: 12px; }
+.provenance a { color: var(--mint); }
+.artifact-tools { margin-top: 12px; }
+.artifact-tools label { display: grid; gap: 4px; color: var(--muted); font-size: 11px; }
+.artifact-tools input, .artifact-tools select { padding: 8px; color: var(--ink); background: #0b1917; border: 1px solid var(--line); }
+.citation-insert { margin-top: 12px; color: var(--muted); }
+.revision-preview { margin-top: 18px; padding: 18px; background: #0b1917; border-left: 3px solid var(--gold); }
+.revision-preview pre { white-space: pre-wrap; }
+.artifact-list { display: grid; gap: 10px; margin-top: 32px; }
+.artifact-list > button { display: flex; justify-content: space-between; text-align: left; }
+.artifact-list small { margin-left: 18px; font-weight: 400; }
 
 @media (max-width: 760px) {
   .workspace-shell { grid-template-columns: 76px minmax(0, 1fr); }
@@ -142,4 +158,5 @@ button { justify-self: end; padding: 10px 16px; color: #10231f; background: var(
   .agent-grid { grid-template-columns: 1fr; }
   .answer-layout { grid-template-columns: 1fr; }
   .filters { align-items: stretch; flex-direction: column; }
+  .artifact-editor > header { flex-direction: column; }
 }

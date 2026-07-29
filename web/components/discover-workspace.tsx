@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 
+import { ArtifactDocument, ArtifactEditor } from "./artifact-editor";
+
 export type TraceEvent = {
   id: number;
   type: string;
@@ -122,6 +124,8 @@ export function DiscoverWorkspace() {
   const [events, setEvents] = useState<TraceEvent[]>([]);
   const [answer, setAnswer] = useState("");
   const [selectedEvidence, setSelectedEvidence] = useState<string>();
+  const [artifact, setArtifact] = useState<ArtifactDocument>();
+  const [creatingArtifact, setCreatingArtifact] = useState(false);
   const source = useRef<EventSource>(null);
 
   useEffect(() => {
@@ -187,6 +191,34 @@ export function DiscoverWorkspace() {
     if (runId) await fetch(`${API}/runs/${runId}/cancel`, { method: "POST" });
   }
 
+  async function turnIntoArtifact() {
+    if (!conversationId || !runId) return;
+    setCreatingArtifact(true);
+    try {
+      const conversationResponse = await fetch(`${API}/conversations/${conversationId}`);
+      const conversation = await conversationResponse.json() as {
+        messages: Array<{ id: string; role: string; run_id?: string }>;
+      };
+      const message = conversation.messages.find(
+        (item) => item.role === "assistant" && item.run_id === runId,
+      );
+      if (!message) throw new Error("Completed answer not found.");
+      const response = await fetch(`${API}/artifacts/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          artifact_type: "briefing",
+          conversation_id: conversationId,
+          message_id: message.id,
+        }),
+      });
+      if (!response.ok) throw new Error("Artifact could not be generated.");
+      setArtifact((await response.json()) as ArtifactDocument);
+    } finally {
+      setCreatingArtifact(false);
+    }
+  }
+
   return (
     <section className="welcome">
       <p className="eyebrow">Discover · Scripted mode is clearly labelled</p>
@@ -210,6 +242,11 @@ export function DiscoverWorkspace() {
         <div className="answer-layout">
           <article className="streaming-answer" aria-live="polite">
             <CitedAnswer answer={answer} citations={citations} onSelect={setSelectedEvidence} />
+            {events.some((event) => event.type === "final") && (
+              <button disabled={creatingArtifact} onClick={() => void turnIntoArtifact()}>
+                {creatingArtifact ? "Creating…" : "Turn into artifact"}
+              </button>
+            )}
           </article>
           <EvidencePanel
             evidence={evidence}
@@ -217,6 +254,9 @@ export function DiscoverWorkspace() {
             refreshed={refreshed}
           />
         </div>
+      )}
+      {artifact && (
+        <ArtifactEditor initialArtifact={artifact} onClose={() => setArtifact(undefined)} />
       )}
       {events.length > 0 && <TraceTimeline events={events} />}
     </section>
