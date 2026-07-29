@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .artifacts import (
     ArtifactCitation,
+    ArtifactGenerationError,
+    ArtifactGenerator,
     ArtifactRepository,
     ArtifactType,
     StaleArtifactRevision,
@@ -69,6 +71,19 @@ class UpdateArtifactRequest(ApiModel):
     reason: str = Field(default="manual edit", max_length=300)
 
 
+class GenerateArtifactRequest(ApiModel):
+    artifact_type: ArtifactType
+    conversation_id: str
+    message_id: str
+    instructions: str | None = Field(default=None, max_length=20_000)
+
+
+class ReviseArtifactSectionRequest(ApiModel):
+    expected_revision: int = Field(ge=1)
+    heading: str = Field(min_length=1, max_length=300)
+    instructions: str = Field(min_length=1, max_length=20_000)
+
+
 def create_app(
     settings: HighlandSettings | None = None,
     *,
@@ -90,6 +105,7 @@ def create_app(
     conversations = ConversationStore(workspace.conversations)
     artifacts = ArtifactRepository(workspace.artifacts)
     provider = model_provider or build_model_provider(configured)
+    artifact_generator = ArtifactGenerator(provider.chat, artifacts)
     discover = DiscoverService(
         index_dir=workspace.indexes / "search",
         conversations=conversations,
@@ -141,6 +157,46 @@ def create_app(
         artifact = artifacts.create(**request.model_dump())
         return artifact.model_dump(mode="json")
 
+    @app.post("/artifacts/generate", status_code=status.HTTP_201_CREATED)
+    async def generate_artifact(request: GenerateArtifactRequest) -> dict[str, object]:
+        try:
+            conversation = conversations.get(request.conversation_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Originating conversation not found") from None
+        message = next(
+            (item for item in conversation.messages if item.id == request.message_id),
+            None,
+        )
+        if message is None or message.role != "assistant" or not message.run_id:
+            raise HTTPException(status_code=422, detail="Select a completed assistant answer")
+        evidence = [
+            ArtifactCitation(
+                id=f"E{index}",
+                label=str(index),
+                source_id=source.source_id,
+                source_url=source.source_url,
+                chunk_id=source.chunk_id,
+                title=source.title,
+                passage=source.passage,
+                source_system=source.source_system,
+                updated_at=source.updated_at,
+            )
+            for index, source in enumerate(message.sources, start=1)
+        ]
+        try:
+            artifact = await artifact_generator.generate(
+                artifact_type=request.artifact_type,
+                answer=message.content,
+                evidence=evidence,
+                conversation_id=request.conversation_id,
+                run_id=message.run_id,
+                message_id=message.id,
+                instructions=request.instructions,
+            )
+        except ArtifactGenerationError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        return artifact.model_dump(mode="json")
+
     @app.get("/artifacts")
     async def list_artifacts() -> list[dict[str, object]]:
         return [artifact.model_dump(mode="json") for artifact in artifacts.list()]
@@ -166,6 +222,22 @@ def create_app(
         except StaleArtifactRevision as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
         return artifact.model_dump(mode="json")
+
+    @app.post("/artifacts/{artifact_id}/sections/revise")
+    async def revise_artifact_section(
+        artifact_id: str,
+        request: ReviseArtifactSectionRequest,
+    ) -> dict[str, object]:
+        try:
+            preview = await artifact_generator.preview_section_revision(
+                artifact_id,
+                **request.model_dump(),
+            )
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Artifact not found") from None
+        except ArtifactGenerationError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return preview.model_dump(mode="json")
 
     @app.delete("/artifacts/{artifact_id}", status_code=status.HTTP_204_NO_CONTENT)
     async def delete_artifact(artifact_id: str) -> Response:
