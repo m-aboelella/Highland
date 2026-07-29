@@ -222,7 +222,7 @@ User
 | M0 — Mock enterprise foundation | ✅ Implemented | 5/5 | Realistic local systems and MCP tools |
 | M1 — Application and model-provider foundation | ✅ Implemented | 5/5 | Testable Cohere boundary and local state |
 | M2 — Ingestion and hybrid retrieval | ✅ Implemented | 6/6 | Backfill, incremental sync, FAISS, reranking |
-| M3 — Agent runtime and MCP gateway | ⬜ Not started | 0/6 | Direct model/tool loop, policy, approvals, traces |
+| M3 — Agent runtime and MCP gateway | 🟨 Partial | 1/6 | Direct model/tool loop, policy, approvals, traces |
 | M4 — Discover workspace | ⬜ Not started | 0/6 | Grounded search/chat and evidence UI |
 | M5 — Create artifacts | ⬜ Not started | 0/5 | Persistent editable cited outputs |
 | M6 — Automate workflows | ⬜ Not started | 0/7 | Small model-assisted workflow system |
@@ -737,14 +737,14 @@ Resolve exact citations and expose retrieval diagnostics
 
 # M3 — Agent runtime and MCP gateway
 
-**Milestone status:** ⬜ Not started
+**Milestone status:** 🟨 Partial
 **Milestone outcome:** A direct, inspectable Cohere model/tool loop can use local
 MCP tools, enforce policy, pause for approval, and stream a durable trace.
 
 ## E3.1 — MCP process manager and tool discovery
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E1.1, M0
 
 Scope:
