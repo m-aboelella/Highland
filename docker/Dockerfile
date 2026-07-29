@@ -11,9 +11,10 @@ RUN apt-get update \
 COPY pyproject.toml README.md ./
 COPY src ./src
 COPY data ./data
+COPY config ./config
 RUN pip install --no-cache-dir .
 
 ENV HIGHLAND_SEED_DIR=/app/data/seed
 ENV HIGHLAND_RUNTIME_DIR=/data/runtime
 
-ENTRYPOINT ["highland-mocks"]
+CMD ["highland", "app"]

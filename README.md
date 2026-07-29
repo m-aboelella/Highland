@@ -76,9 +76,24 @@ On a machine with Docker:
 docker compose up --build
 ```
 
-This starts the catalog and all six mock systems. MCP adapters are normally
-spawned as stdio subprocesses by Highland or another MCP client; they are not
-long-running Compose services.
+This starts the complete scripted learning stack: the web workspace at
+`http://localhost:3000`, the Highland API at `http://localhost:8080`, the
+catalog, and all six mock systems. All mutable mock and platform state is
+mounted beneath the single local `var/` directory. Once images have been
+built, scripted mode does not require an internet connection.
+
+MCP adapters remain supervised stdio subprocesses inside the API container;
+they are deliberately not long-running Compose services.
+
+To opt into real, potentially billable Cohere calls without changing source
+code:
+
+```bash
+HIGHLAND_MODEL_BACKEND=cohere COHERE_API_KEY=... docker compose up --build
+```
+
+The backend selection is explicit and defaults to `scripted`. Stop the stack
+with `docker compose down`; this preserves `var/`.
 
 ## Guided demo
 

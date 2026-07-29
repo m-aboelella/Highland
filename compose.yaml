@@ -4,40 +4,139 @@ x-mock-service: &mock-service
     dockerfile: docker/Dockerfile
   volumes:
     - ./var:/data/runtime
+  healthcheck:
+    test:
+      [
+        "CMD",
+        "python",
+        "-c",
+        "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ['PORT']+'/health', timeout=2)",
+      ]
+    interval: 5s
+    timeout: 3s
+    retries: 12
   restart: unless-stopped
 
 services:
   catalog:
     <<: *mock-service
-    command: ["serve", "catalog", "--host", "0.0.0.0", "--port", "8099"]
+    command: ["highland-mocks", "serve", "catalog", "--host", "0.0.0.0", "--port", "8099"]
+    environment:
+      PORT: "8099"
     ports: ["8099:8099"]
 
   atlas-crm:
     <<: *mock-service
-    command: ["serve", "crm", "--host", "0.0.0.0", "--port", "8101"]
+    command: ["highland-mocks", "serve", "crm", "--host", "0.0.0.0", "--port", "8101"]
+    environment:
+      PORT: "8101"
     ports: ["8101:8101"]
 
   archive:
     <<: *mock-service
-    command: ["serve", "knowledge", "--host", "0.0.0.0", "--port", "8102"]
+    command: ["highland-mocks", "serve", "knowledge", "--host", "0.0.0.0", "--port", "8102"]
+    environment:
+      PORT: "8102"
     ports: ["8102:8102"]
 
   relay-desk:
     <<: *mock-service
-    command: ["serve", "support", "--host", "0.0.0.0", "--port", "8103"]
+    command: ["highland-mocks", "serve", "support", "--host", "0.0.0.0", "--port", "8103"]
+    environment:
+      PORT: "8103"
     ports: ["8103:8103"]
 
   beacon:
     <<: *mock-service
-    command: ["serve", "observability", "--host", "0.0.0.0", "--port", "8104"]
+    command: ["highland-mocks", "serve", "observability", "--host", "0.0.0.0", "--port", "8104"]
+    environment:
+      PORT: "8104"
     ports: ["8104:8104"]
 
   pulse:
     <<: *mock-service
-    command: ["serve", "communications", "--host", "0.0.0.0", "--port", "8105"]
+    command: ["highland-mocks", "serve", "communications", "--host", "0.0.0.0", "--port", "8105"]
+    environment:
+      PORT: "8105"
     ports: ["8105:8105"]
 
   track:
     <<: *mock-service
-    command: ["serve", "projects", "--host", "0.0.0.0", "--port", "8106"]
+    command: ["highland-mocks", "serve", "projects", "--host", "0.0.0.0", "--port", "8106"]
+    environment:
+      PORT: "8106"
     ports: ["8106:8106"]
+
+  highland-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ["highland", "app"]
+    environment:
+      COHERE_API_KEY: ${COHERE_API_KEY:-}
+      HIGHLAND_MODEL_BACKEND: ${HIGHLAND_MODEL_BACKEND:-scripted}
+      HIGHLAND_HOST: 0.0.0.0
+      HIGHLAND_PORT: "8080"
+      HIGHLAND_WORKSPACE_DIR: /data/runtime/highland
+      HIGHLAND_MOCK_CATALOG_URL: http://catalog:8099
+      HIGHLAND_CRM_URL: http://atlas-crm:8101
+      HIGHLAND_KNOWLEDGE_URL: http://archive:8102
+      HIGHLAND_SUPPORT_URL: http://relay-desk:8103
+      HIGHLAND_OBSERVABILITY_URL: http://beacon:8104
+      HIGHLAND_COMMUNICATIONS_URL: http://pulse:8105
+      HIGHLAND_PROJECTS_URL: http://track:8106
+    volumes:
+      - ./var:/data/runtime
+    depends_on:
+      catalog:
+        condition: service_healthy
+      atlas-crm:
+        condition: service_healthy
+      archive:
+        condition: service_healthy
+      relay-desk:
+        condition: service_healthy
+      beacon:
+        condition: service_healthy
+      pulse:
+        condition: service_healthy
+      track:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    ports: ["8080:8080"]
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Web.Dockerfile
+      args:
+        NEXT_PUBLIC_HIGHLAND_API_URL: ${NEXT_PUBLIC_HIGHLAND_API_URL:-http://127.0.0.1:8080}
+    depends_on:
+      highland-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1:3000",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    ports: ["3000:3000"]
+    restart: unless-stopped

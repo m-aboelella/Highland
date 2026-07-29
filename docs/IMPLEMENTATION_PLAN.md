@@ -227,7 +227,7 @@ User
 | M5 — Create artifacts | ✅ Implemented | 5/5 | Persistent editable cited outputs |
 | M6 — Automate workflows | ✅ Implemented | 7/7 | Small model-assisted workflow system |
 | M7 — Evaluation and reliability | ✅ Implemented | 5/5 | Deterministic and live-model evidence |
-| M8 — Self-hosted learning experience | ⬜ Not started | 0/4 | One-command stack and teaching path |
+| M8 — Self-hosted learning experience | 🟨 Partial | 1/4 | One-command stack and teaching path |
 
 ---
 
@@ -1761,14 +1761,14 @@ Report scenario cost and enforce evaluation budgets
 
 # M8 — Self-hosted learning experience
 
-**Milestone status:** ⬜ Not started
+**Milestone status:** 🟨 Partial
 **Milestone outcome:** A new learner can start Highland, follow the three
 showcase scenarios, inspect the implementation, and reset everything locally.
 
 ## E8.1 — Full-stack container packaging
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** M4, M5, M6
 
 Scope:
