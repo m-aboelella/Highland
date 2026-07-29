@@ -1,0 +1,53 @@
+{
+  "currency": "USD",
+  "prices": [
+    {
+      "model": "command-a-plus-05-2026",
+      "effective_date": "2026-05-20",
+      "input_usd_per_million_tokens": 0.0,
+      "output_usd_per_million_tokens": 0.0,
+      "search_usd_per_unit": null,
+      "notes": "Cohere standard API is free until its published rate limits; private Model Vault pricing is contractual."
+    },
+    {
+      "model": "embed-v4.0",
+      "effective_date": "2026-07-29",
+      "input_usd_per_million_tokens": null,
+      "output_usd_per_million_tokens": null,
+      "search_usd_per_unit": null,
+      "notes": "Public production API token pricing was not published; configure the applicable commercial rate."
+    },
+    {
+      "model": "rerank-v4.0-fast",
+      "effective_date": "2026-07-29",
+      "input_usd_per_million_tokens": null,
+      "output_usd_per_million_tokens": null,
+      "search_usd_per_unit": null,
+      "notes": "Public production API search-unit pricing was not published; configure the applicable commercial rate."
+    },
+    {
+      "model": "scripted-chat",
+      "effective_date": "2026-07-29",
+      "input_usd_per_million_tokens": 0.0,
+      "output_usd_per_million_tokens": 0.0,
+      "search_usd_per_unit": null,
+      "notes": "Deterministic local test provider."
+    },
+    {
+      "model": "deterministic-embedding",
+      "effective_date": "2026-07-29",
+      "input_usd_per_million_tokens": 0.0,
+      "output_usd_per_million_tokens": 0.0,
+      "search_usd_per_unit": null,
+      "notes": "Deterministic local test provider."
+    },
+    {
+      "model": "scripted-rerank",
+      "effective_date": "2026-07-29",
+      "input_usd_per_million_tokens": null,
+      "output_usd_per_million_tokens": null,
+      "search_usd_per_unit": 0.0,
+      "notes": "Deterministic local test provider."
+    }
+  ]
+}

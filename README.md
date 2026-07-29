@@ -105,3 +105,26 @@ See [Architecture](docs/ARCHITECTURE.md), [Mock ecosystem](docs/MOCK_ECOSYSTEM.m
 The milestone-by-milestone delivery roadmap, implementation status, and
 one-epic-per-commit working agreement are in the
 [implementation plan](docs/IMPLEMENTATION_PLAN.md).
+
+## Application foundation
+
+Highland defaults to its explicit deterministic model backend. Copy
+`.env.example` to `.env`, then inspect readiness and local model usage:
+
+```bash
+highland doctor
+highland usage
+```
+
+Run the application API with `highland app`. Its platform state lives under
+`var/highland/` and can be cleared without changing mock source-system records:
+
+```bash
+highland reset-platform-state
+```
+
+Set `HIGHLAND_MODEL_BACKEND=cohere` and `COHERE_API_KEY` only when live,
+potentially billable model calls are intended. Model prices and effective dates
+are explicit in `config/model_prices.json`; unknown production rates fail
+closed once usage is observed and must be configured for the applicable
+commercial agreement.

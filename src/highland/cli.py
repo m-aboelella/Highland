@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import UTC, datetime
 
 import uvicorn
 
 from .doctor import inspect_environment
 from .settings import HighlandSettings
+from .storage.cost_ledger import CostLedger, UsageSummary
 from .workspace import WorkspacePaths
 
 
@@ -20,6 +22,8 @@ def build_parser() -> argparse.ArgumentParser:
         "reset-platform-state",
         help="Reset Highland state without changing mock source-system state.",
     )
+    usage = subparsers.add_parser("usage", help="Summarize model usage and estimated cost.")
+    usage.add_argument("--run-id", help="Run to summarize; defaults to the latest ledger run.")
     return parser
 
 
@@ -66,8 +70,31 @@ def main() -> None:
         workspace = WorkspacePaths.from_root(settings.workspace_dir)
         workspace.reset()
         print(f"Reset Highland platform state in {workspace.root}")
+    elif args.command == "usage":
+        workspace = WorkspacePaths.from_root(settings.workspace_dir)
+        ledger = CostLedger(workspace.runs / "cost-ledger.jsonl")
+        run_id = args.run_id or ledger.latest_run_id()
+        run = ledger.summarize(run_id=run_id) if run_id else ledger.summarize(run_id="")
+        today = datetime.now(UTC).date()
+        month = ledger.summarize(month=today)
+        print(f"Current run: {run_id or 'none'}")
+        _print_usage(run)
+        print(f"Calendar month: {today:%Y-%m}")
+        _print_usage(month)
     else:
         raise AssertionError(f"Unhandled command: {args.command}")
+
+
+def _print_usage(summary: UsageSummary) -> None:
+    calls = summary.calls
+    tokens = summary.input_tokens + summary.output_tokens
+    searches = summary.search_units
+    cost = summary.known_cost_usd
+    unknown = summary.unknown_price_calls
+    print(
+        f"  calls={calls} tokens={tokens} search_units={searches:g} "
+        f"known_cost_usd=${cost:.6f} unknown_price_calls={unknown}"
+    )
 
 
 if __name__ == "__main__":
