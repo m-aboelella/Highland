@@ -34,6 +34,15 @@ type RevisionPreview = {
   citations: ArtifactCitation[];
 };
 
+type CoverageReport = {
+  advisory: string;
+  claims: Array<{
+    text: string;
+    status: "supported" | "weakly_supported" | "unsupported" | "stale";
+    explanation: string;
+  }>;
+};
+
 export function ArtifactEditor({
   initialArtifact,
   onClose,
@@ -48,6 +57,7 @@ export function ArtifactEditor({
   const [revisionInstruction, setRevisionInstruction] = useState("");
   const [preview, setPreview] = useState<RevisionPreview>();
   const [revisionCount, setRevisionCount] = useState<number>();
+  const [coverage, setCoverage] = useState<CoverageReport>();
   const headings = useMemo(
     () =>
       [...content.matchAll(/^#{1,6}\s+(.+)$/gm)].map((match) => match[1].trim()),
@@ -102,6 +112,14 @@ export function ArtifactEditor({
     });
     if (!response.ok) throw new Error("Section revision could not be generated.");
     setPreview((await response.json()) as RevisionPreview);
+  }
+
+  async function checkEvidence() {
+    const response = await fetch(`${API}/artifacts/${artifact.id}/evidence-coverage`, {
+      method: "POST",
+    });
+    if (!response.ok) throw new Error("Evidence coverage could not be checked.");
+    setCoverage((await response.json()) as CoverageReport);
   }
 
   function close() {
@@ -160,6 +178,9 @@ export function ArtifactEditor({
         <button className="secondary" onClick={() => void loadRevisions()}>
           Revisions {revisionCount === undefined ? "" : `(${revisionCount})`}
         </button>
+        <button className="secondary" onClick={() => void checkEvidence()}>
+          Check evidence
+        </button>
       </div>
       <div className="citation-insert">
         <span>Insert citation:</span>
@@ -187,6 +208,20 @@ export function ArtifactEditor({
             Replace this section
           </button>
           <button className="secondary" onClick={() => setPreview(undefined)}>Discard preview</button>
+        </aside>
+      )}
+      {coverage && (
+        <aside className="coverage-report" aria-label="Evidence coverage">
+          <h3>Claim and evidence coverage</h3>
+          <p>{coverage.advisory}</p>
+          <ul>
+            {coverage.claims.map((claim, index) => (
+              <li className={`coverage-${claim.status}`} key={`${claim.text}-${index}`}>
+                <b>{claim.status.replaceAll("_", " ")}</b> {claim.text}
+                <small>{claim.explanation}</small>
+              </li>
+            ))}
+          </ul>
         </aside>
       )}
     </section>

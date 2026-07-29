@@ -13,6 +13,8 @@ from .artifacts import (
     ArtifactGenerator,
     ArtifactRepository,
     ArtifactType,
+    EvidenceCoverageChecker,
+    EvidenceCoverageError,
     StaleArtifactRevision,
 )
 from .discover.conversations import ConversationStore
@@ -106,6 +108,7 @@ def create_app(
     artifacts = ArtifactRepository(workspace.artifacts)
     provider = model_provider or build_model_provider(configured)
     artifact_generator = ArtifactGenerator(provider.chat, artifacts)
+    coverage_checker = EvidenceCoverageChecker(provider.chat)
     discover = DiscoverService(
         index_dir=workspace.indexes / "search",
         conversations=conversations,
@@ -207,6 +210,16 @@ def create_app(
             return artifacts.get(artifact_id).model_dump(mode="json")
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Artifact not found") from None
+
+    @app.post("/artifacts/{artifact_id}/evidence-coverage")
+    async def check_artifact_evidence(artifact_id: str) -> dict[str, object]:
+        try:
+            report = await coverage_checker.check(artifacts.get(artifact_id))
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Artifact not found") from None
+        except EvidenceCoverageError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        return report.model_dump(mode="json")
 
     @app.patch("/artifacts/{artifact_id}")
     async def update_artifact(

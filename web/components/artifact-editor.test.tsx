@@ -82,4 +82,22 @@ describe("ArtifactEditor", () => {
     expect(confirm).toHaveBeenCalled();
     expect(close).not.toHaveBeenCalled();
   });
+
+  it("shows unsupported factual claims after rerunning evidence coverage", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        advisory: "Coverage labels are model-assisted review signals, not guarantees.",
+        claims: [{
+          text: "Revenue fell.",
+          status: "unsupported",
+          explanation: "No valid supporting evidence was mapped.",
+        }],
+      }),
+    }));
+    render(<ArtifactEditor initialArtifact={artifact} />);
+    fireEvent.click(screen.getByRole("button", { name: "Check evidence" }));
+    expect(await screen.findByLabelText("Evidence coverage")).toHaveTextContent("Revenue fell.");
+    expect(screen.getByText("unsupported")).toBeInTheDocument();
+  });
 });

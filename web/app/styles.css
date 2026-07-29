@@ -145,6 +145,12 @@ button { justify-self: end; padding: 10px 16px; color: #10231f; background: var(
 .citation-insert { margin-top: 12px; color: var(--muted); }
 .revision-preview { margin-top: 18px; padding: 18px; background: #0b1917; border-left: 3px solid var(--gold); }
 .revision-preview pre { white-space: pre-wrap; }
+.coverage-report { margin-top: 18px; padding: 18px; background: #0b1917; border: 1px solid var(--line); }
+.coverage-report > p, .coverage-report small { display: block; color: var(--muted); }
+.coverage-report li { margin: 8px 0; }
+.coverage-supported b { color: var(--mint); }
+.coverage-weakly_supported b, .coverage-stale b { color: var(--gold); }
+.coverage-unsupported b { color: #e7a79a; }
 .artifact-list { display: grid; gap: 10px; margin-top: 32px; }
 .artifact-list > button { display: flex; justify-content: space-between; text-align: left; }
 .artifact-list small { margin-left: 18px; font-weight: 400; }
