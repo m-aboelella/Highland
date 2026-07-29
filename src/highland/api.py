@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from fastapi import Body, FastAPI, Header, HTTPException
-from fastapi.responses import StreamingResponse
+from uuid import uuid4
 
+from fastapi import Body, FastAPI, Header, HTTPException, Response, status
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field
+
+from .discover.conversations import ConversationStore
 from .models.provider import build_model_provider
 from .retrieval.citations import CitationResolver
 from .retrieval.sources import MCPSourceReader
@@ -13,6 +17,22 @@ from .settings import HighlandSettings
 from .workspace import WorkspacePaths
 
 
+class ApiModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class CreateConversationRequest(ApiModel):
+    title: str | None = Field(default=None, max_length=200)
+
+
+class RenameConversationRequest(ApiModel):
+    title: str = Field(min_length=1, max_length=200)
+
+
+class CreateMessageRequest(ApiModel):
+    content: str = Field(min_length=1, max_length=100_000)
+
+
 def create_app(settings: HighlandSettings | None = None) -> FastAPI:
     configured = settings or HighlandSettings()
     workspace = WorkspacePaths.from_root(configured.workspace_dir)
@@ -20,6 +40,7 @@ def create_app(settings: HighlandSettings | None = None) -> FastAPI:
     app = FastAPI(title="Highland", version="0.1.0")
     approvals = ApprovalStore(workspace.runs / "approvals")
     run_events = RunEventStore(workspace.runs / "events")
+    conversations = ConversationStore(workspace.conversations)
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -59,6 +80,82 @@ def create_app(settings: HighlandSettings | None = None) -> FastAPI:
         if chunk is None:
             raise HTTPException(status_code=404, detail="Indexed chunk not found")
         return chunk.model_dump(mode="json")
+
+    @app.post("/conversations", status_code=status.HTTP_201_CREATED)
+    async def create_conversation(
+        request: CreateConversationRequest | None = None,
+    ) -> dict[str, object]:
+        conversation = conversations.create(request.title if request else None)
+        return conversation.model_dump(mode="json")
+
+    @app.get("/conversations")
+    async def list_conversations() -> list[dict[str, object]]:
+        return [item.model_dump(mode="json") for item in conversations.list()]
+
+    @app.get("/conversations/{conversation_id}")
+    async def get_conversation(conversation_id: str) -> dict[str, object]:
+        try:
+            return conversations.get(conversation_id).model_dump(mode="json")
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Conversation not found") from None
+
+    @app.patch("/conversations/{conversation_id}")
+    async def rename_conversation(
+        conversation_id: str,
+        request: RenameConversationRequest,
+    ) -> dict[str, object]:
+        try:
+            return conversations.rename(conversation_id, request.title).model_dump(mode="json")
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Conversation not found") from None
+
+    @app.delete("/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def delete_conversation(conversation_id: str) -> Response:
+        try:
+            conversations.delete(conversation_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Conversation not found") from None
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @app.post("/conversations/{conversation_id}/messages", status_code=status.HTTP_201_CREATED)
+    async def add_message(
+        conversation_id: str,
+        request: CreateMessageRequest,
+    ) -> dict[str, object]:
+        try:
+            return conversations.append_message(
+                conversation_id, role="user", content=request.content
+            ).model_dump(mode="json")
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Conversation not found") from None
+
+    @app.post("/conversations/{conversation_id}/runs", status_code=status.HTTP_202_ACCEPTED)
+    async def create_run(
+        conversation_id: str,
+        request: CreateMessageRequest,
+    ) -> dict[str, object]:
+        run_id = f"run_{uuid4().hex}"
+        try:
+            message = conversations.append_message(
+                conversation_id,
+                role="user",
+                content=request.content,
+                run_id=run_id,
+            )
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Conversation not found") from None
+        run_events.append(
+            run_id,
+            "run_started",
+            {"conversation_id": conversation_id, "message_id": message.id},
+        )
+        return {
+            "run_id": run_id,
+            "conversation_id": conversation_id,
+            "message_id": message.id,
+            "status": "queued",
+            "events_url": f"/runs/{run_id}/events",
+        }
 
     @app.get("/approvals/{approval_id}")
     async def get_approval(approval_id: str) -> dict[str, object]:
