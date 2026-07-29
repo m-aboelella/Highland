@@ -221,7 +221,7 @@ User
 | --- | --- | ---: | --- |
 | M0 — Mock enterprise foundation | ✅ Implemented | 5/5 | Realistic local systems and MCP tools |
 | M1 — Application and model-provider foundation | ✅ Implemented | 5/5 | Testable Cohere boundary and local state |
-| M2 — Ingestion and hybrid retrieval | 🟨 Partial | 3/6 | Backfill, incremental sync, FAISS, reranking |
+| M2 — Ingestion and hybrid retrieval | 🟨 Partial | 4/6 | Backfill, incremental sync, FAISS, reranking |
 | M3 — Agent runtime and MCP gateway | ⬜ Not started | 0/6 | Direct model/tool loop, policy, approvals, traces |
 | M4 — Discover workspace | ⬜ Not started | 0/6 | Grounded search/chat and evidence UI |
 | M5 — Create artifacts | ⬜ Not started | 0/5 | Persistent editable cited outputs |
@@ -631,8 +631,8 @@ Add incremental index synchronization and safe rebuilds
 
 ## E2.4 — Cohere embeddings and FAISS persistence
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E1.3, E1.4, E2.1
 
 Scope:

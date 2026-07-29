@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import json
+import shutil
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from highland.models.contracts import EmbeddingModel, EmbeddingRequest, InputType
+from highland.models.contracts import EmbeddingModel
 
 from .contracts import Chunk, SourceDocument, SyncManifest, SyncState, chunk_document
+from .faiss_store import EmbeddingIndex, FaissStore
 from .ingestion import BackfillService, normalize_record, promote_snapshot, record_hash
 from .manifest import load_manifest
 from .sources import INDEXABLE_SOURCES, SourceReader, SourceReadError
@@ -48,7 +51,10 @@ class IndexSynchronizer:
     async def rebuild(self) -> SyncResult:
         previous = self.status()
         backfill = await BackfillService(
-            self.reader, index_dir=self.index_dir, reports_dir=self.reports_dir
+            self.reader,
+            index_dir=self.index_dir,
+            reports_dir=self.reports_dir,
+            embedding_model=self.embedding_model,
         ).backfill()
         current = self.status()
         return SyncResult(
@@ -108,14 +114,26 @@ class IndexSynchronizer:
         unchanged = set(grouped) - added - changed
         deleted = set(active_previous) - set(grouped)
         changed_chunks = [chunk for key in sorted(added | changed) for chunk in grouped[key]]
-        if changed_chunks and self.embedding_model is not None:
-            await self.embedding_model.embed(
-                EmbeddingRequest(
-                    texts=[chunk.text for chunk in changed_chunks],
-                    input_type=InputType.SEARCH_DOCUMENT,
-                    logical_call_id=f"sync:{started.isoformat()}",
-                )
+        vector_source: Path | None = None
+        vector_stage: Path | None = None
+        embedded_count = len(changed_chunks)
+        if self.embedding_model is not None:
+            indexer = EmbeddingIndex(self.embedding_model)
+            existing_vectors: dict[str, list[float]] = {}
+            vector_path = self.index_dir / "vectors"
+            if vector_path.exists():
+                existing_vectors = FaissStore.open(
+                    vector_path, expected_model_id=indexer.model_id
+                ).vectors_by_id()
+            missing_chunks = [chunk for chunk in chunks if chunk.id not in existing_vectors]
+            existing_vectors.update(await indexer.embed_chunks(missing_chunks))
+            embedded_count = len(missing_chunks)
+            self.index_dir.parent.mkdir(parents=True, exist_ok=True)
+            vector_stage = Path(
+                tempfile.mkdtemp(prefix=".sync-vectors-", dir=self.index_dir.parent)
             )
+            vector_source = vector_stage / "vectors"
+            indexer.build_from_vectors(chunks, existing_vectors, vector_source)
         completed = datetime.now(UTC)
         tombstones = {
             key: active_previous[key].model_copy(
@@ -130,15 +148,20 @@ class IndexSynchronizer:
                 if record.state is SyncState.TOMBSTONED and key not in grouped
             }
         )
-        promote_snapshot(
-            self.index_dir,
-            chunks=chunks,
-            documents=documents,
-            started=started,
-            completed=completed,
-            counts=counts,
-            tombstones=tombstones,
-        )
+        try:
+            promote_snapshot(
+                self.index_dir,
+                chunks=chunks,
+                documents=documents,
+                started=started,
+                completed=completed,
+                counts=counts,
+                tombstones=tombstones,
+                vector_source=vector_source,
+            )
+        finally:
+            if vector_stage is not None and vector_stage.exists():
+                shutil.rmtree(vector_stage)
         result = SyncResult(
             state=SyncState.COMPLETED,
             started_at=started,
@@ -147,7 +170,7 @@ class IndexSynchronizer:
             changed_records=len(changed),
             unchanged_records=len(unchanged),
             deleted_records=len(deleted),
-            embedded_chunks=len(changed_chunks),
+            embedded_chunks=embedded_count,
             promoted=True,
         )
         self._write_report(result)

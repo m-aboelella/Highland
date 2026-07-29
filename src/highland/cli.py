@@ -106,6 +106,7 @@ def main() -> None:
             reader,
             index_dir=workspace.indexes / "search",
             reports_dir=workspace.synchronization,
+            embedding_model=build_model_provider(settings).embeddings,
         )
         result = asyncio.run(service.backfill(None if args.all else args.source))
         print(result.model_dump_json(indent=2))

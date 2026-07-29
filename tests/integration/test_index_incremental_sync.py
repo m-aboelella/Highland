@@ -37,8 +37,14 @@ async def test_no_change_sync_makes_zero_embedding_calls(seed_dir, tmp_path) -> 
     reader = MutableReader(seed_dir)
     index = tmp_path / "indexes" / "search"
     reports = tmp_path / "sync"
-    await BackfillService(reader, index_dir=index, reports_dir=reports).backfill()
     embeddings = DeterministicEmbeddingModel()
+    await BackfillService(
+        reader,
+        index_dir=index,
+        reports_dir=reports,
+        embedding_model=embeddings,
+    ).backfill()
+    embeddings.requests.clear()
 
     result = await IndexSynchronizer(
         reader,
@@ -58,8 +64,14 @@ async def test_updating_one_ticket_embeds_only_affected_chunks(seed_dir, tmp_pat
     reader = MutableReader(seed_dir)
     index = tmp_path / "indexes" / "search"
     reports = tmp_path / "sync"
-    await BackfillService(reader, index_dir=index, reports_dir=reports).backfill()
     embeddings = DeterministicEmbeddingModel()
+    await BackfillService(
+        reader,
+        index_dir=index,
+        reports_dir=reports,
+        embedding_model=embeddings,
+    ).backfill()
+    embeddings.requests.clear()
     ticket = reader.records["relay"][0]
     ticket["description"] += " The new observation affects only this ticket."
     ticket["updated_at"] = "2026-07-29T12:30:00Z"

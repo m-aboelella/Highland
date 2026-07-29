@@ -11,6 +11,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from highland.models.contracts import EmbeddingModel
+
 from .contracts import Chunk, SourceDocument, SyncManifest, SyncRecord, SyncState, chunk_document
 from .manifest import save_manifest
 from .sources import INDEXABLE_SOURCES, SourceReader, SourceReadError
@@ -122,10 +124,18 @@ def normalize_record(source: str, record: dict[str, Any]) -> list[SourceDocument
 
 
 class BackfillService:
-    def __init__(self, reader: SourceReader, *, index_dir: Path, reports_dir: Path) -> None:
+    def __init__(
+        self,
+        reader: SourceReader,
+        *,
+        index_dir: Path,
+        reports_dir: Path,
+        embedding_model: EmbeddingModel | None = None,
+    ) -> None:
         self.reader = reader
         self.index_dir = index_dir
         self.reports_dir = reports_dir
+        self.embedding_model = embedding_model
 
     async def backfill(self, sources: list[str] | None = None) -> BackfillResult:
         selected = tuple(sources or INDEXABLE_SOURCES)
@@ -162,14 +172,30 @@ class BackfillService:
         self._write_report(result)
         if failures:
             return result
-        promote_snapshot(
-            self.index_dir,
-            chunks=chunks,
-            documents=documents,
-            started=started,
-            completed=completed,
-            counts=counts,
-        )
+        vector_source: Path | None = None
+        vector_stage: Path | None = None
+        if self.embedding_model is not None:
+            from .faiss_store import EmbeddingIndex
+
+            self.index_dir.parent.mkdir(parents=True, exist_ok=True)
+            vector_stage = Path(
+                tempfile.mkdtemp(prefix=".embedding-stage-", dir=self.index_dir.parent)
+            )
+            vector_source = vector_stage / "vectors"
+            await EmbeddingIndex(self.embedding_model).build(chunks, vector_source)
+        try:
+            promote_snapshot(
+                self.index_dir,
+                chunks=chunks,
+                documents=documents,
+                started=started,
+                completed=completed,
+                counts=counts,
+                vector_source=vector_source,
+            )
+        finally:
+            if vector_stage is not None and vector_stage.exists():
+                shutil.rmtree(vector_stage)
         result = result.model_copy(update={"promoted": True})
         self._write_report(result)
         return result
@@ -202,6 +228,7 @@ def promote_snapshot(
     completed: datetime,
     counts: dict[str, int],
     tombstones: dict[str, SyncRecord] | None = None,
+    vector_source: Path | None = None,
 ) -> None:
     index_dir.parent.mkdir(parents=True, exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix=".index-stage-", dir=index_dir.parent))
@@ -233,6 +260,8 @@ def promote_snapshot(
             records=records,
         )
         save_manifest(stage / "manifest.json", manifest)
+        if vector_source is not None:
+            shutil.copytree(vector_source, stage / "vectors")
         backup = index_dir.with_name(f".{index_dir.name}.previous")
         if backup.exists():
             shutil.rmtree(backup)
