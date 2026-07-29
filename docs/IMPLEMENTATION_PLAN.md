@@ -225,7 +225,7 @@ User
 | M3 — Agent runtime and MCP gateway | ✅ Implemented | 6/6 | Direct model/tool loop, policy, approvals, traces |
 | M4 — Discover workspace | ✅ Implemented | 6/6 | Grounded search/chat and evidence UI |
 | M5 — Create artifacts | ✅ Implemented | 5/5 | Persistent editable cited outputs |
-| M6 — Automate workflows | 🟨 Partial | 2/7 | Small model-assisted workflow system |
+| M6 — Automate workflows | 🟨 Partial | 3/7 | Small model-assisted workflow system |
 | M7 — Evaluation and reliability | ⬜ Not started | 0/5 | Deterministic and live-model evidence |
 | M8 — Self-hosted learning experience | ⬜ Not started | 0/4 | One-command stack and teaching path |
 
@@ -1418,8 +1418,8 @@ Draft validated workflow plans with Cohere structured output
 
 ## E6.3 — Sequential workflow executor
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E6.1, M2, E3.2, E3.5
 
 Scope:
