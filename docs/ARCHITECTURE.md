@@ -36,7 +36,7 @@ one repository. This preserves important production-like behavior:
 
 ### Highland owns
 
-- users, teams, roles, and source permissions;
+- one local workspace and its visibility policy;
 - conversations and persistent artifacts;
 - the model/tool loop and model routing;
 - indexed chunks, embeddings, hybrid retrieval, and reranking;
@@ -73,16 +73,23 @@ system’s data without changing the agent runtime.
 ## Planned platform layers
 
 1. **Mock ecosystem** — delivered in the current foundation.
-2. **Discover** — ingestion, PostgreSQL/pgvector, hybrid retrieval, reranking,
-   grounded chat, evidence viewer.
-3. **Create** — persistent editable artifacts, claim/evidence checks, Markdown
+2. **Application foundation** — typed configuration, inspectable local state,
+   capability-aware model providers, and usage budgets.
+3. **Discover** — ingestion into local chunk sidecars and a derived FAISS
+   vector index, hybrid retrieval, reranking, grounded chat, evidence viewer.
+4. **Create** — persistent editable artifacts, claim/evidence checks, Markdown
    and PDF export.
-4. **Agent runtime** — direct Cohere Chat v2 loop, tool registry, budgets,
+5. **Agent runtime** — direct Cohere Chat v2 loop, tool registry, budgets,
    approval pauses, SSE trace.
-5. **Automate** — versioned five-node workflow model, scheduler, branch, loop,
+6. **Automate** — versioned five-node workflow model, scheduler, branch, loop,
    run history.
-6. **Evaluation** — deterministic retrieval tests and optional billable
+7. **Evaluation** — deterministic retrieval tests and optional billable
    end-to-end model evaluations.
+
+The baseline has no accounts, teams, roles, PostgreSQL, pgvector, or Redis.
+Atomic files under `var/highland/` are the application source of truth; FAISS is
+rebuildable derived state. Repository boundaries keep a future storage adapter
+possible without making an external database part of the learning setup.
 
 The mock ecosystem intentionally works before a model key exists. Model-backed
 features should degrade to deterministic fixtures or be clearly marked as

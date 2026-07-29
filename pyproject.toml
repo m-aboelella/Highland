@@ -13,6 +13,7 @@ dependencies = [
   "httpx>=0.28,<1",
   "mcp>=1.12,<2",
   "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3",
   "uvicorn[standard]>=0.34,<1",
 ]
 
@@ -24,11 +25,12 @@ dev = [
 ]
 
 [project.scripts]
+highland = "highland.cli:main"
 highland-mocks = "highland_mocks.cli:main"
 highland-mcp = "highland_mocks.mcp_server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/highland_mocks"]
+packages = ["src/highland", "src/highland_mocks"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

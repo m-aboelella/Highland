@@ -220,7 +220,7 @@ User
 | Milestone | Status | Implemented epics | Purpose |
 | --- | --- | ---: | --- |
 | M0 — Mock enterprise foundation | ✅ Implemented | 5/5 | Realistic local systems and MCP tools |
-| M1 — Application and model-provider foundation | ⬜ Not started | 0/5 | Testable Cohere boundary and local state |
+| M1 — Application and model-provider foundation | 🟨 Partial | 1/5 | Testable Cohere boundary and local state |
 | M2 — Ingestion and hybrid retrieval | ⬜ Not started | 0/6 | Backfill, incremental sync, FAISS, reranking |
 | M3 — Agent runtime and MCP gateway | ⬜ Not started | 0/6 | Direct model/tool loop, policy, approvals, traces |
 | M4 — Discover workspace | ⬜ Not started | 0/6 | Grounded search/chat and evidence UI |
@@ -321,15 +321,15 @@ pytest
 
 # M1 — Application and model-provider foundation
 
-**Milestone status:** ⬜ Not started
+**Milestone status:** 🟨 Partial
 **Milestone outcome:** Highland has a runnable application core whose model
 dependencies can be switched explicitly between deterministic test doubles and
 real Cohere adapters.
 
 ## E1.1 — Application package, configuration, and local workspace layout
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** M0
 
 Scope:
