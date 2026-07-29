@@ -26,3 +26,8 @@ FAISS indexes.
 Before a live run, review the configured model IDs and budgets, and set a
 spending limit in the Cohere dashboard. Never put the API key in a command that
 will be committed or copied into a report.
+
+Run the deterministic retrieval benchmark with `highland eval retrieval`.
+It derives evidence queries from the scenario manifests, adds exact-ID,
+filtering, stale-record, and customer-isolation probes, then writes ignored JSON
+and Markdown reports under `var/highland/reports/retrieval/`.

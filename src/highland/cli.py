@@ -4,10 +4,12 @@ import argparse
 import asyncio
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 import uvicorn
 
 from .doctor import inspect_environment
+from .evaluation.retrieval import evaluate_retrieval
 from .models.provider import build_model_provider
 from .retrieval.ingestion import BackfillService
 from .retrieval.sources import INDEXABLE_SOURCES, MCPSourceReader
@@ -38,6 +40,11 @@ def build_parser() -> argparse.ArgumentParser:
     index_commands.add_parser("sync", help="Synchronize new, changed, and deleted content.")
     index_commands.add_parser("status", help="Show the current synchronization manifest.")
     index_commands.add_parser("rebuild", help="Safely rebuild all searchable content.")
+    evaluation = subparsers.add_parser("eval", help="Run Highland evaluations.")
+    evaluation_commands = evaluation.add_subparsers(dest="evaluation_command", required=True)
+    evaluation_commands.add_parser(
+        "retrieval", help="Run deterministic retrieval and isolation evaluation."
+    )
     return parser
 
 
@@ -134,6 +141,26 @@ def main() -> None:
             print(result.model_dump_json(indent=2))
             if not result.promoted:
                 raise SystemExit(1)
+    elif args.command == "eval" and args.evaluation_command == "retrieval":
+        report = evaluate_retrieval(
+            scenarios_dir=Path(__file__).resolve().parents[2] / "data" / "scenarios",
+            seed_dir=Path(__file__).resolve().parents[2] / "data" / "seed",
+            reports_dir=settings.workspace_dir / "reports" / "retrieval",
+        )
+        print(
+            f"provider={report.provider} candidate_recall={report.candidate_recall:.1%} "
+            f"top_k_recall={report.top_k_recall:.1%} "
+            f"result={'PASS' if report.passed else 'FAIL'}"
+        )
+        for case in report.cases:
+            if not case.passed:
+                print(
+                    f"FAIL {case.case_id}: stage={case.failure_stage} "
+                    f"missing={case.missing_top_k_ids} leakage={case.leaked_ids}"
+                )
+        print(f"reports={settings.workspace_dir / 'reports' / 'retrieval'}")
+        if not report.passed:
+            raise SystemExit(1)
     else:
         raise AssertionError(f"Unhandled command: {args.command}")
 
