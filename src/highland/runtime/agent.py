@@ -25,6 +25,7 @@ from highland.models.contracts import (
 )
 
 from .approvals import ApprovalStore
+from .events import RunEventStore
 from .policy import RunScope, ToolRegistry, ToolRejected, ValidatedToolCall
 
 
@@ -94,12 +95,14 @@ class AgentLoop:
         profile: AgentProfile,
         repository: RunRepository,
         approvals: ApprovalStore | None = None,
+        event_store: RunEventStore | None = None,
     ) -> None:
         self.model = model
         self.tools = tools
         self.profile = profile
         self.repository = repository
         self.approvals = approvals
+        self.event_store = event_store
 
     async def run(
         self,
@@ -137,6 +140,17 @@ class AgentLoop:
                     "finish_reason": response.finish_reason.value,
                     "usage": response.usage.model_dump(mode="json"),
                 }
+            )
+            events.append(
+                {
+                    "type": "usage",
+                    "step": step,
+                    **response.usage.model_dump(mode="json"),
+                }
+            )
+            events.extend(
+                {"type": "citation", **citation.model_dump(mode="json")}
+                for citation in response.citations
             )
             totals = _add_usage(totals, response.usage)
             messages.append(response.message)
@@ -224,7 +238,7 @@ class AgentLoop:
             finish_reason=FinishReason.ERROR,
             usage=totals,
         )
-        events.append({"type": "run_stopped", "reason": "maximum steps or runtime budget"})
+        events.append({"type": "run_failed", "reason": "maximum steps or runtime budget"})
         self._save(run_id, messages, events, outcome)
         return outcome
 
@@ -247,6 +261,11 @@ class AgentLoop:
         events: list[dict[str, Any]],
         outcome: RunOutcome | None,
     ) -> None:
+        if self.event_store:
+            persisted = len(self.event_store.replay(run_id))
+            for event in events[persisted:]:
+                payload = {key: value for key, value in event.items() if key != "type"}
+                self.event_store.append(run_id, event["type"], payload)
         self.repository.save(
             run_id,
             {
