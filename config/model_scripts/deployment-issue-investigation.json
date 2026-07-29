@@ -1,0 +1,9 @@
+{
+  "mode": "simulated",
+  "model": "offline-showcase",
+  "chat_steps": [
+    {
+      "content": "Simulated investigation links the latency increase to the scripted deployment evidence."
+    }
+  ]
+}

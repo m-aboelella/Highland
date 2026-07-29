@@ -220,7 +220,7 @@ User
 | Milestone | Status | Implemented epics | Purpose |
 | --- | --- | ---: | --- |
 | M0 — Mock enterprise foundation | ✅ Implemented | 5/5 | Realistic local systems and MCP tools |
-| M1 — Application and model-provider foundation | 🟨 Partial | 2/5 | Testable Cohere boundary and local state |
+| M1 — Application and model-provider foundation | 🟨 Partial | 3/5 | Testable Cohere boundary and local state |
 | M2 — Ingestion and hybrid retrieval | ⬜ Not started | 0/6 | Backfill, incremental sync, FAISS, reranking |
 | M3 — Agent runtime and MCP gateway | ⬜ Not started | 0/6 | Direct model/tool loop, policy, approvals, traces |
 | M4 — Discover workspace | ⬜ Not started | 0/6 | Grounded search/chat and evidence UI |
@@ -408,8 +408,8 @@ Define capability-aware model provider contracts
 
 ## E1.3 — Deterministic scripted model provider
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E1.2
 
 Scope:

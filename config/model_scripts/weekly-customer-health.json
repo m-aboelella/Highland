@@ -1,0 +1,13 @@
+{
+  "mode": "simulated",
+  "model": "offline-showcase",
+  "chat_steps": [
+    {
+      "content": "Simulated weekly health summary created from the offline scenario fixture.",
+      "structured_output": {
+        "label": "simulated",
+        "health": "at-risk"
+      }
+    }
+  ]
+}

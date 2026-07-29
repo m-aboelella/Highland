@@ -1,0 +1,10 @@
+{
+  "mode": "simulated",
+  "model": "offline-showcase",
+  "chat_steps": [
+    {
+      "content": "Simulated Northwind meeting briefing assembled from scripted evidence.",
+      "stream_fragments": ["Simulated Northwind ", "meeting briefing assembled ", "from scripted evidence."]
+    }
+  ]
+}
