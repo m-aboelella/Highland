@@ -14,6 +14,7 @@ class EventType(StrEnum):
     RUN_STARTED = "run_started"
     RUN_COMPLETED = "run_completed"
     RUN_FAILED = "run_failed"
+    RUN_CANCELLED = "run_cancelled"
     RETRIEVAL = "retrieval"
     MODEL_CALL = "model_call"
     MODEL_DELTA = "model_delta"
@@ -123,6 +124,8 @@ class RunEventStore:
 
 def _status(events: list[RunEvent]) -> str:
     types = {event.type for event in events}
+    if EventType.RUN_CANCELLED in types:
+        return "cancelled"
     if EventType.RUN_FAILED in types:
         return "failed"
     if EventType.RUN_COMPLETED in types or EventType.FINAL in types:

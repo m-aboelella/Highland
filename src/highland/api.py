@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from fastapi import Body, FastAPI, Header, HTTPException, Response, status
+from fastapi import BackgroundTasks, Body, FastAPI, Header, HTTPException, Response, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -14,6 +15,7 @@ from .retrieval.sources import MCPSourceReader
 from .retrieval.sync import IndexSynchronizer
 from .runtime.agent import AgentProfile
 from .runtime.approvals import ApprovalStore
+from .runtime.cancellation import RunCancellationStore
 from .runtime.events import RunEventStore
 from .settings import HighlandSettings
 from .workspace import WorkspacePaths
@@ -35,6 +37,10 @@ class CreateMessageRequest(ApiModel):
     content: str = Field(min_length=1, max_length=100_000)
 
 
+class CancelRunRequest(ApiModel):
+    reason: str | None = Field(default=None, max_length=500)
+
+
 def create_app(
     settings: HighlandSettings | None = None,
     *,
@@ -44,8 +50,15 @@ def create_app(
     workspace = WorkspacePaths.from_root(configured.workspace_dir)
     workspace.ensure()
     app = FastAPI(title="Highland", version="0.1.0")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://127.0.0.1:3000", "http://localhost:3000"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     approvals = ApprovalStore(workspace.runs / "approvals")
     run_events = RunEventStore(workspace.runs / "events")
+    cancellations = RunCancellationStore(workspace.runs / "cancellations")
     conversations = ConversationStore(workspace.conversations)
     provider = model_provider or build_model_provider(configured)
     discover = DiscoverService(
@@ -172,6 +185,7 @@ def create_app(
     async def create_run(
         conversation_id: str,
         request: CreateMessageRequest,
+        background_tasks: BackgroundTasks,
     ) -> dict[str, object]:
         run_id = f"run_{uuid4().hex}"
         try:
@@ -188,6 +202,11 @@ def create_app(
             "run_started",
             {"conversation_id": conversation_id, "message_id": message.id},
         )
+        background_tasks.add_task(
+            _run_discovery,
+            ChatRequest(conversation_id=conversation_id, query=request.content),
+            run_id,
+        )
         return {
             "run_id": run_id,
             "conversation_id": conversation_id,
@@ -195,6 +214,26 @@ def create_app(
             "status": "queued",
             "events_url": f"/runs/{run_id}/events",
         }
+
+    async def _run_discovery(request: ChatRequest, run_id: str) -> None:
+        try:
+            await discover.chat(request, run_id=run_id)
+        except Exception as error:  # noqa: BLE001 - persist background failure for the UI
+            run_events.append(
+                run_id,
+                "error",
+                {"error_type": type(error).__name__, "message": str(error)},
+            )
+
+    @app.post("/runs/{run_id}/cancel", status_code=status.HTTP_202_ACCEPTED)
+    async def cancel_run(
+        run_id: str,
+        request: CancelRunRequest | None = None,
+    ) -> dict[str, object]:
+        payload = cancellations.cancel(run_id, reason=request.reason if request else None)
+        if run_events.summary(run_id)["status"] not in {"completed", "failed", "cancelled"}:
+            run_events.append(run_id, "run_cancelled", payload)
+        return {**payload, "status": "cancelled"}
 
     @app.post("/discover/search")
     async def discover_search(request: SearchRequest) -> dict[str, object]:

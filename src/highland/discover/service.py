@@ -13,6 +13,7 @@ from highland.retrieval.hybrid import HybridRetriever, RetrievalFilters, Retriev
 from highland.retrieval.sync import load_chunks
 from highland.runtime.agent import AgentLoop, AgentProfile, RunOutcome, RunRepository
 from highland.runtime.approvals import ApprovalStore
+from highland.runtime.cancellation import RunCancellationStore
 from highland.runtime.events import RunEventStore
 from highland.runtime.mcp import MCPGateway
 from highland.runtime.policy import RunScope, ToolRegistry
@@ -153,6 +154,7 @@ class DiscoverService:
                 RunRepository(self.runs_dir / "state"),
                 ApprovalStore(self.runs_dir / "approvals"),
                 event_store,
+                RunCancellationStore(self.runs_dir / "cancellations"),
             )
             outcome = await loop.run(
                 run_id=run_id,

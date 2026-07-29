@@ -102,6 +102,14 @@ h1 { max-width: 740px; margin: 0 0 18px; font: 500 clamp(35px, 6vw, 72px)/1.02 G
   font: inherit;
 }
 button { justify-self: end; padding: 10px 16px; color: #10231f; background: var(--mint); border: 0; border-radius: 7px; font-weight: 750; }
+.run-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.secondary { color: var(--ink); background: transparent; border: 1px solid var(--line); }
+.streaming-answer { margin-top: 28px; padding: 22px; background: var(--panel); border-left: 3px solid var(--mint); }
+.trace { display: grid; gap: 8px; margin: 24px 0 0; padding: 0; list-style: none; }
+.trace li { display: grid; grid-template-columns: 1fr auto; padding: 11px 14px; color: var(--muted); background: #0b1917; border: 1px solid var(--line); border-radius: 8px; }
+.trace span { color: var(--ink); text-transform: capitalize; }
+.trace details { grid-column: 1 / -1; margin-top: 6px; }
+.trace pre { max-height: 280px; overflow: auto; color: var(--mint); white-space: pre-wrap; }
 
 .agent-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 38px; }
 .agent-card { padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }

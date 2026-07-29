@@ -25,6 +25,7 @@ from highland.models.contracts import (
 )
 
 from .approvals import ApprovalService, ApprovalStatus, ApprovalStore
+from .cancellation import RunCancellationStore
 from .events import RunEventStore
 from .policy import RunScope, ToolRegistry, ToolRejected, ValidatedToolCall
 
@@ -60,6 +61,7 @@ class RunStatus(StrEnum):
     PAUSED = "paused"
     MAX_STEPS = "max_steps"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class RunOutcome(RuntimeModel):
@@ -96,6 +98,7 @@ class AgentLoop:
         repository: RunRepository,
         approvals: ApprovalStore | None = None,
         event_store: RunEventStore | None = None,
+        cancellations: RunCancellationStore | None = None,
     ) -> None:
         self.model = model
         self.tools = tools
@@ -103,6 +106,7 @@ class AgentLoop:
         self.repository = repository
         self.approvals = approvals
         self.event_store = event_store
+        self.cancellations = cancellations
 
     async def run(
         self,
@@ -121,6 +125,8 @@ class AgentLoop:
         started = time.monotonic()
         totals = Usage(input_tokens=0, output_tokens=0)
         for step in range(1, self.profile.budgets.max_steps + 1):
+            if self.cancellations and self.cancellations.is_cancelled(run_id):
+                return self._cancel(run_id, messages, events, totals)
             if step > self.profile.budgets.max_model_calls:
                 break
             if time.monotonic() - started >= self.profile.budgets.max_wall_seconds:
@@ -133,6 +139,8 @@ class AgentLoop:
                 logical_call_id=f"{run_id}:model:{step}",
             )
             response = await self.model.chat(request)
+            if self.cancellations and self.cancellations.is_cancelled(run_id):
+                return self._cancel(run_id, messages, events, totals)
             events.append(
                 {
                     "type": "model_call",
@@ -155,6 +163,8 @@ class AgentLoop:
             totals = _add_usage(totals, response.usage)
             messages.append(response.message)
             if not response.message.tool_calls:
+                if response.message.content:
+                    events.append({"type": "model_delta", "text": response.message.content})
                 events.append({"type": "final", "content": response.message.content})
                 outcome = RunOutcome(
                     run_id=run_id,
@@ -239,6 +249,23 @@ class AgentLoop:
             usage=totals,
         )
         events.append({"type": "run_failed", "reason": "maximum steps or runtime budget"})
+        self._save(run_id, messages, events, outcome)
+        return outcome
+
+    def _cancel(
+        self,
+        run_id: str,
+        messages: list[Message],
+        events: list[dict[str, Any]],
+        usage: Usage,
+    ) -> RunOutcome:
+        outcome = RunOutcome(
+            run_id=run_id,
+            status=RunStatus.CANCELLED,
+            finish_reason=FinishReason.ERROR,
+            usage=usage,
+        )
+        events.append({"type": "run_cancelled", "reason": "cancelled by user"})
         self._save(run_id, messages, events, outcome)
         return outcome
 
