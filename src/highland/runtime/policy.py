@@ -80,6 +80,9 @@ class ToolRegistry:
     def policy_for(self, tool: MCPTool) -> ToolPolicy:
         return self._policies.get(tool.source_name, self._policies["*"])
 
+    def model_tools(self) -> list[Any]:
+        return self.gateway.model_tools()
+
     def validate(
         self,
         qualified_name: str,
