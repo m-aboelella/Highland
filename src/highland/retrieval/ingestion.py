@@ -162,60 +162,17 @@ class BackfillService:
         self._write_report(result)
         if failures:
             return result
-        self._promote(chunks, documents, started, completed, counts)
+        promote_snapshot(
+            self.index_dir,
+            chunks=chunks,
+            documents=documents,
+            started=started,
+            completed=completed,
+            counts=counts,
+        )
         result = result.model_copy(update={"promoted": True})
         self._write_report(result)
         return result
-
-    def _promote(
-        self,
-        chunks: list[Chunk],
-        documents: list[SourceDocument],
-        started: datetime,
-        completed: datetime,
-        counts: dict[str, int],
-    ) -> None:
-        self.index_dir.parent.mkdir(parents=True, exist_ok=True)
-        stage = Path(tempfile.mkdtemp(prefix=".index-stage-", dir=self.index_dir.parent))
-        try:
-            _write_jsonl(
-                stage / "chunks.jsonl", [chunk.model_dump(mode="json") for chunk in chunks]
-            )
-            _write_jsonl(
-                stage / "documents.jsonl",
-                [document.model_dump(mode="json") for document in documents],
-            )
-            by_record: dict[tuple[str, str], list[Chunk]] = defaultdict(list)
-            for chunk in chunks:
-                by_record[(chunk.source_system, chunk.source_id)].append(chunk)
-            manifest = SyncManifest(
-                state=SyncState.COMPLETED,
-                started_at=started,
-                completed_at=completed,
-                source_counts=counts,
-                records={
-                    f"{source}:{source_id}": SyncRecord(
-                        source_system=source,
-                        source_id=source_id,
-                        content_hash=_record_hash(record_chunks),
-                        updated_at=max(chunk.updated_at for chunk in record_chunks),
-                        chunk_ids=[chunk.id for chunk in record_chunks],
-                    )
-                    for (source, source_id), record_chunks in sorted(by_record.items())
-                },
-            )
-            save_manifest(stage / "manifest.json", manifest)
-            backup = self.index_dir.with_name(f".{self.index_dir.name}.previous")
-            if backup.exists():
-                shutil.rmtree(backup)
-            if self.index_dir.exists():
-                os.replace(self.index_dir, backup)
-            os.replace(stage, self.index_dir)
-            if backup.exists():
-                shutil.rmtree(backup)
-        finally:
-            if stage.exists():
-                shutil.rmtree(stage)
 
     def _write_report(self, result: BackfillResult) -> None:
         self.reports_dir.mkdir(parents=True, exist_ok=True)
@@ -224,7 +181,7 @@ class BackfillService:
         path.write_text(result.model_dump_json(indent=2) + "\n", encoding="utf-8")
 
 
-def _record_hash(chunks: list[Chunk]) -> str:
+def record_hash(chunks: list[Chunk]) -> str:
     import hashlib
 
     return hashlib.sha256("".join(chunk.content_hash for chunk in chunks).encode()).hexdigest()
@@ -234,3 +191,56 @@ def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     path.write_text(
         "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows), encoding="utf-8"
     )
+
+
+def promote_snapshot(
+    index_dir: Path,
+    *,
+    chunks: list[Chunk],
+    documents: list[SourceDocument],
+    started: datetime,
+    completed: datetime,
+    counts: dict[str, int],
+    tombstones: dict[str, SyncRecord] | None = None,
+) -> None:
+    index_dir.parent.mkdir(parents=True, exist_ok=True)
+    stage = Path(tempfile.mkdtemp(prefix=".index-stage-", dir=index_dir.parent))
+    try:
+        _write_jsonl(stage / "chunks.jsonl", [chunk.model_dump(mode="json") for chunk in chunks])
+        _write_jsonl(
+            stage / "documents.jsonl",
+            [document.model_dump(mode="json") for document in documents],
+        )
+        by_record: dict[tuple[str, str], list[Chunk]] = defaultdict(list)
+        for chunk in chunks:
+            by_record[(chunk.source_system, chunk.source_id)].append(chunk)
+        records = {
+            f"{source}:{source_id}": SyncRecord(
+                source_system=source,
+                source_id=source_id,
+                content_hash=record_hash(record_chunks),
+                updated_at=max(chunk.updated_at for chunk in record_chunks),
+                chunk_ids=[chunk.id for chunk in record_chunks],
+            )
+            for (source, source_id), record_chunks in sorted(by_record.items())
+        }
+        records.update(tombstones or {})
+        manifest = SyncManifest(
+            state=SyncState.COMPLETED,
+            started_at=started,
+            completed_at=completed,
+            source_counts=counts,
+            records=records,
+        )
+        save_manifest(stage / "manifest.json", manifest)
+        backup = index_dir.with_name(f".{index_dir.name}.previous")
+        if backup.exists():
+            shutil.rmtree(backup)
+        if index_dir.exists():
+            os.replace(index_dir, backup)
+        os.replace(stage, index_dir)
+        if backup.exists():
+            shutil.rmtree(backup)
+    finally:
+        if stage.exists():
+            shutil.rmtree(stage)

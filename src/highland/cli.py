@@ -8,8 +8,10 @@ from datetime import UTC, datetime
 import uvicorn
 
 from .doctor import inspect_environment
+from .models.provider import build_model_provider
 from .retrieval.ingestion import BackfillService
 from .retrieval.sources import INDEXABLE_SOURCES, MCPSourceReader
+from .retrieval.sync import IndexSynchronizer
 from .settings import HighlandSettings
 from .storage.cost_ledger import CostLedger, UsageSummary
 from .workspace import WorkspacePaths
@@ -33,6 +35,9 @@ def build_parser() -> argparse.ArgumentParser:
     selection = backfill.add_mutually_exclusive_group(required=True)
     selection.add_argument("--source", choices=INDEXABLE_SOURCES, action="append")
     selection.add_argument("--all", action="store_true")
+    index_commands.add_parser("sync", help="Synchronize new, changed, and deleted content.")
+    index_commands.add_parser("status", help="Show the current synchronization manifest.")
+    index_commands.add_parser("rebuild", help="Safely rebuild all searchable content.")
     return parser
 
 
@@ -106,6 +111,28 @@ def main() -> None:
         print(result.model_dump_json(indent=2))
         if not result.promoted:
             raise SystemExit(1)
+    elif args.command == "index":
+        workspace = WorkspacePaths.from_root(settings.workspace_dir)
+        workspace.ensure()
+        reader = MCPSourceReader(
+            settings.connector_commands,
+            timeout_seconds=settings.connector_timeout_seconds,
+        )
+        synchronizer = IndexSynchronizer(
+            reader,
+            index_dir=workspace.indexes / "search",
+            reports_dir=workspace.synchronization,
+            embedding_model=build_model_provider(settings).embeddings,
+        )
+        if args.index_command == "status":
+            manifest = synchronizer.status()
+            print(manifest.model_dump_json(indent=2) if manifest else '{"state":"missing"}')
+        else:
+            operation = synchronizer.sync if args.index_command == "sync" else synchronizer.rebuild
+            result = asyncio.run(operation())
+            print(result.model_dump_json(indent=2))
+            if not result.promoted:
+                raise SystemExit(1)
     else:
         raise AssertionError(f"Unhandled command: {args.command}")
 
