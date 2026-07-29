@@ -133,7 +133,11 @@ class AgentLoop:
                 break
             request = ChatRequest(
                 messages=self._bounded_messages(messages),
-                tools=self.tools.model_tools(),
+                tools=(
+                    self.tools.model_tools(scope)
+                    if isinstance(self.tools, ToolRegistry)
+                    else self.tools.model_tools()
+                ),
                 documents=documents or [],
                 required_capabilities=ModelCapabilities(tools=True),
                 logical_call_id=f"{run_id}:model:{step}",

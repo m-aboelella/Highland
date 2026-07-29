@@ -21,6 +21,7 @@ class ToolMode(StrEnum):
 class RunScope:
     allowed_customers: frozenset[str] = frozenset()
     allowed_visibilities: frozenset[str] = frozenset()
+    allow_writes: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,8 +81,19 @@ class ToolRegistry:
     def policy_for(self, tool: MCPTool) -> ToolPolicy:
         return self._policies.get(tool.source_name, self._policies["*"])
 
-    def model_tools(self) -> list[Any]:
-        return self.gateway.model_tools()
+    def model_tools(self, scope: RunScope | None = None) -> list[Any]:
+        definitions = self.gateway.model_tools()
+        if scope is None or scope.allow_writes:
+            return definitions
+        return [
+            definition
+            for definition in definitions
+            if self._policy_for_name(definition.name).mode is ToolMode.READ
+        ]
+
+    def _policy_for_name(self, qualified_name: str) -> ToolPolicy:
+        tool = self._tools.get(qualified_name)
+        return self.policy_for(tool) if tool else self._policies["*"]
 
     def validate(
         self,
@@ -99,6 +111,11 @@ class ToolRegistry:
                 code="unknown_tool",
             )
         policy = self.policy_for(tool)
+        if policy.mode is ToolMode.WRITE and not scope.allow_writes:
+            raise ToolRejected(
+                f"Write tool {qualified_name!r} is disabled for this run",
+                code="write_disabled",
+            )
         supplied = dict(arguments)
         generated_key = None
         if policy.idempotent_with_key:

@@ -223,7 +223,7 @@ User
 | M1 — Application and model-provider foundation | ✅ Implemented | 5/5 | Testable Cohere boundary and local state |
 | M2 — Ingestion and hybrid retrieval | ✅ Implemented | 6/6 | Backfill, incremental sync, FAISS, reranking |
 | M3 — Agent runtime and MCP gateway | ✅ Implemented | 6/6 | Direct model/tool loop, policy, approvals, traces |
-| M4 — Discover workspace | 🟨 Partial | 5/6 | Grounded search/chat and evidence UI |
+| M4 — Discover workspace | ✅ Implemented | 6/6 | Grounded search/chat and evidence UI |
 | M5 — Create artifacts | ⬜ Not started | 0/5 | Persistent editable cited outputs |
 | M6 — Automate workflows | ⬜ Not started | 0/7 | Small model-assisted workflow system |
 | M7 — Evaluation and reliability | ⬜ Not started | 0/5 | Deterministic and live-model evidence |
@@ -959,7 +959,7 @@ Validate the approved deployment investigation scenario
 
 # M4 — Discover workspace
 
-**Milestone status:** 🟨 Partial
+**Milestone status:** ✅ Implemented
 **Milestone outcome:** A learner can search and chat across enterprise
 knowledge, see exact sources, and inspect how the answer was produced.
 
@@ -1138,8 +1138,8 @@ Add source filters citations and answer diagnostics
 
 ## E4.6 — Customer-meeting preparation acceptance
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E4.5
 
 Scope:

@@ -3,8 +3,8 @@
   "model": "offline-showcase",
   "chat_steps": [
     {
-      "content": "Simulated Northwind meeting briefing assembled from scripted evidence.",
-      "stream_fragments": ["Simulated Northwind ", "meeting briefing assembled ", "from scripted evidence."]
+      "content": "Simulated meeting briefing\n\n## Deployment\nNorthwind is a strategic private-cloud customer running 4.18.2 with an October 31 renewal.\n\n## Recent issues\nProduction retrieval latency is elevated. Compaction memory contention is a hypothesis, not a confirmed root cause.\n\n## Unresolved actions\nComplete the capacity review and agree the latency SLO.\n\n## Talking points\nReview the controlled compaction evidence, confirm Q4 ingestion forecasts, and align on renewal success criteria.",
+      "stream_fragments": ["Simulated meeting briefing\n\n", "## Deployment\nNorthwind is a strategic private-cloud customer. ", "## Recent issues\nProduction retrieval latency is elevated; the suspected cause remains a hypothesis. ", "## Unresolved actions\nComplete the capacity review and latency SLO. ", "## Talking points\nReview evidence and align on renewal success criteria."]
     }
   ]
 }
