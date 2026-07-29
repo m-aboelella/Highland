@@ -63,6 +63,28 @@ def create_app(
     async def health() -> dict[str, str]:
         return {"status": "ok", "model_backend": configured.model_backend.value}
 
+    @app.get("/workspace/status")
+    async def workspace_status() -> dict[str, object]:
+        manifest = synchronizer().status()
+        return {
+            "workspace": configured.workspace_name,
+            "model_mode": configured.model_backend.value,
+            "index": {
+                "state": manifest.state.value if manifest else "missing",
+                "records": len(manifest.records) if manifest else 0,
+            },
+            "connectors": [
+                {"name": name, "state": "configured"}
+                for name in sorted(configured.connector_commands)
+            ],
+            "run": {"state": "idle"},
+        }
+
+    @app.get("/agents")
+    async def list_agents() -> list[dict[str, object]]:
+        profile = AgentProfile.load(configured.agent_profile_config)
+        return [profile.model_dump(mode="json")]
+
     def synchronizer() -> IndexSynchronizer:
         return IndexSynchronizer(
             MCPSourceReader(

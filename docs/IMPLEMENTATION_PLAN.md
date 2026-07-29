@@ -223,7 +223,7 @@ User
 | M1 — Application and model-provider foundation | ✅ Implemented | 5/5 | Testable Cohere boundary and local state |
 | M2 — Ingestion and hybrid retrieval | ✅ Implemented | 6/6 | Backfill, incremental sync, FAISS, reranking |
 | M3 — Agent runtime and MCP gateway | ✅ Implemented | 6/6 | Direct model/tool loop, policy, approvals, traces |
-| M4 — Discover workspace | 🟨 Partial | 2/6 | Grounded search/chat and evidence UI |
+| M4 — Discover workspace | 🟨 Partial | 3/6 | Grounded search/chat and evidence UI |
 | M5 — Create artifacts | ⬜ Not started | 0/5 | Persistent editable cited outputs |
 | M6 — Automate workflows | ⬜ Not started | 0/7 | Small model-assisted workflow system |
 | M7 — Evaluation and reliability | ⬜ Not started | 0/5 | Deterministic and live-model evidence |
@@ -1030,8 +1030,8 @@ Add grounded enterprise search and conversational discovery
 
 ## E4.3 — North-inspired but original web workspace shell
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E4.1
 
 Scope:

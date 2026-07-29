@@ -10,3 +10,5 @@ build/
 *.egg-info/
 var/
 .env
+web/.next/
+web/node_modules/

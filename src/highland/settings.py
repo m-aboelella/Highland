@@ -46,6 +46,7 @@ class HighlandSettings(BaseSettings):
     )
 
     workspace_dir: Path = REPO_ROOT / "var" / "highland"
+    workspace_name: str = "Highland"
     model_price_config: Path = REPO_ROOT / "config" / "model_prices.json"
     tool_policy_config: Path = REPO_ROOT / "config" / "tool_policy.json"
     agent_profile_config: Path = REPO_ROOT / "config" / "agents" / "general.json"
