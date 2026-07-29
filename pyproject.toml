@@ -14,10 +14,12 @@ dependencies = [
   "faiss-cpu>=1.11,<2",
   "httpx>=0.28,<1",
   "jsonschema>=4.23,<5",
+  "markdown>=3.8,<4",
   "mcp>=1.12,<2",
   "pydantic>=2.10,<3",
   "pydantic-settings>=2.7,<3",
   "uvicorn[standard]>=0.34,<1",
+  "weasyprint>=66,<67",
 ]
 
 [project.optional-dependencies]

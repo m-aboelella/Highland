@@ -145,6 +145,10 @@ export function ArtifactEditor({
       <p className="provenance">
         From conversation {artifact.conversation_id} ·{" "}
         <a href={`${API}/runs/${artifact.run_id}/trace`}>View originating run</a>
+        {" · "}
+        <a href={`${API}/artifacts/${artifact.id}/export.md`}>Export Markdown</a>
+        {" · "}
+        <a href={`${API}/artifacts/${artifact.id}/export.pdf`}>Export PDF</a>
       </p>
       <textarea
         aria-label="Artifact Markdown"

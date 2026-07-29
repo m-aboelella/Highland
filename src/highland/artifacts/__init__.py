@@ -6,6 +6,7 @@ from .coverage import (
     EvidenceCoverageError,
     EvidenceCoverageReport,
 )
+from .export import RemoteResourceBlocked, export_markdown, export_pdf, safe_export_filename
 from .generation import ArtifactGenerationError, ArtifactGenerator, SectionRevisionPreview
 from .repository import (
     Artifact,
@@ -28,6 +29,10 @@ __all__ = [
     "EvidenceCoverageChecker",
     "EvidenceCoverageError",
     "EvidenceCoverageReport",
+    "RemoteResourceBlocked",
     "SectionRevisionPreview",
     "StaleArtifactRevision",
+    "export_markdown",
+    "export_pdf",
+    "safe_export_filename",
 ]

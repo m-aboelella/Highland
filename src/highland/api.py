@@ -16,6 +16,9 @@ from .artifacts import (
     EvidenceCoverageChecker,
     EvidenceCoverageError,
     StaleArtifactRevision,
+    export_markdown,
+    export_pdf,
+    safe_export_filename,
 )
 from .discover.conversations import ConversationStore
 from .discover.service import ChatRequest, DiscoverFilters, DiscoverService, SearchRequest
@@ -220,6 +223,32 @@ def create_app(
         except EvidenceCoverageError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         return report.model_dump(mode="json")
+
+    @app.get("/artifacts/{artifact_id}/export.md")
+    async def export_artifact_markdown(artifact_id: str) -> Response:
+        try:
+            artifact = artifacts.get(artifact_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Artifact not found") from None
+        filename = safe_export_filename(artifact.title, extension="md")
+        return Response(
+            content=export_markdown(artifact),
+            media_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @app.get("/artifacts/{artifact_id}/export.pdf")
+    async def export_artifact_pdf(artifact_id: str) -> Response:
+        try:
+            artifact = artifacts.get(artifact_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Artifact not found") from None
+        filename = safe_export_filename(artifact.title, extension="pdf")
+        return Response(
+            content=export_pdf(artifact),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     @app.patch("/artifacts/{artifact_id}")
     async def update_artifact(
