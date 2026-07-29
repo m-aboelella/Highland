@@ -13,6 +13,12 @@ from .doctor import inspect_environment
 from .evaluation.costs import EvaluationCostTracker
 from .evaluation.retrieval import evaluate_retrieval
 from .evaluation.scenarios import LiveScenarioEvaluator
+from .maintenance import (
+    export_learning_state,
+    import_learning_state,
+    reset_local_state,
+    reset_targets,
+)
 from .models.pricing import PriceCatalog
 from .models.provider import build_model_provider
 from .retrieval.ingestion import BackfillService
@@ -32,6 +38,22 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser(
         "reset-platform-state",
         help="Reset Highland state without changing mock source-system state.",
+    )
+    reset = subparsers.add_parser(
+        "reset",
+        help="Restore mock source state and clear Highland platform state.",
+    )
+    reset.add_argument("--yes", action="store_true", help="Confirm the displayed reset targets.")
+    backup = subparsers.add_parser("backup", help="Export or import human-created local state.")
+    backup_commands = backup.add_subparsers(dest="backup_command", required=True)
+    backup_export = backup_commands.add_parser("export", help="Create a portable ZIP backup.")
+    backup_export.add_argument("path", type=Path)
+    backup_import = backup_commands.add_parser("import", help="Restore a portable ZIP backup.")
+    backup_import.add_argument("path", type=Path)
+    backup_import.add_argument(
+        "--replace",
+        action="store_true",
+        help="Replace non-empty artifact, workflow, and trace targets.",
     )
     usage = subparsers.add_parser("usage", help="Summarize model usage and estimated cost.")
     usage.add_argument("--run-id", help="Run to summarize; defaults to the latest ledger run.")
@@ -104,6 +126,27 @@ def main() -> None:
         workspace = WorkspacePaths.from_root(settings.workspace_dir)
         workspace.reset()
         print(f"Reset Highland platform state in {workspace.root}")
+    elif args.command == "reset":
+        targets = reset_targets(settings)
+        print("Reset will restore or clear only these targets:")
+        for target in targets:
+            print(f"  {target}")
+        if not args.yes and input("Type 'reset' to continue: ").strip() != "reset":
+            raise SystemExit("Reset cancelled.")
+        reset_local_state(settings)
+        print("Restored mock source state and cleared Highland platform state.")
+    elif args.command == "backup" and args.backup_command == "export":
+        destination = export_learning_state(settings.workspace_dir, args.path)
+        print(f"Exported artifacts, workflows, and traces to {destination}")
+    elif args.command == "backup" and args.backup_command == "import":
+        targets = import_learning_state(
+            settings.workspace_dir,
+            args.path,
+            replace=args.replace,
+        )
+        print("Imported artifacts, workflows, and traces into:")
+        for target in targets:
+            print(f"  {target}")
     elif args.command == "usage":
         workspace = WorkspacePaths.from_root(settings.workspace_dir)
         ledger = CostLedger(workspace.runs / "cost-ledger.jsonl")

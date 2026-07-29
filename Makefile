@@ -1,4 +1,4 @@
-.PHONY: setup generate dev test reset lint typecheck web-test web-build repository-check ci
+.PHONY: setup generate dev test reset lint typecheck web-test web-build repository-check ci release-check
 
 setup:
 	python3 -m venv .venv
@@ -34,3 +34,9 @@ repository-check:
 	.venv/bin/python scripts/check_repository.py
 
 ci: lint typecheck repository-check test web-test web-build
+
+release-check: ci
+	.venv/bin/pytest tests/docs tests/unit/test_maintenance.py \
+		tests/acceptance/test_meeting_preparation.py \
+		tests/acceptance/test_deployment_investigation.py \
+		tests/acceptance/test_weekly_customer_health.py

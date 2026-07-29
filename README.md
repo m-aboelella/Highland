@@ -54,6 +54,22 @@ Reset mutable service state back to the generated seed:
 highland-mocks reset
 ```
 
+After the application is installed, reset both mock and platform state with
+explicit confirmation:
+
+```bash
+highland reset --yes
+```
+
+The command prints every target before acting and never deletes checked-in
+`data/seed/`. Preserve human-created artifacts, workflows, and traces around a
+reset with:
+
+```bash
+highland backup export ./highland-learning-state.zip
+highland backup import ./highland-learning-state.zip --replace
+```
+
 ## Run an MCP connector
 
 Each adapter is deliberately a separate MCP server. Start the mock APIs, then
@@ -119,6 +135,7 @@ See [Architecture](docs/ARCHITECTURE.md), [Mock ecosystem](docs/MOCK_ECOSYSTEM.m
 [showcase scenarios](docs/SCENARIOS.md) for the design and learning path.
 Start with [Learn Highland by following a run](docs/LEARNING_PATH.md) for
 executable Discover, Create, approval, and Automation tutorials plus a trace-to-code map.
+Maintainers should use the [educational release checklist](docs/RELEASE.md).
 The milestone-by-milestone delivery roadmap, implementation status, and
 one-epic-per-commit working agreement are in the
 [implementation plan](docs/IMPLEMENTATION_PLAN.md).

@@ -9,7 +9,7 @@ from pydantic import BeforeValidator, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CONNECTOR_COMMANDS = {
+DEFAULT_CONNECTOR_COMMANDS: dict[str, tuple[str, ...]] = {
     name: ("highland-mcp", name)
     for name in ("crm", "knowledge", "support", "observability", "communications", "projects")
 }
@@ -46,6 +46,8 @@ class HighlandSettings(BaseSettings):
     )
 
     workspace_dir: Path = REPO_ROOT / "var" / "highland"
+    seed_dir: Path = REPO_ROOT / "data" / "seed"
+    runtime_dir: Path = REPO_ROOT / "var"
     workspace_name: str = "Highland"
     model_price_config: Path = REPO_ROOT / "config" / "model_prices.json"
     tool_policy_config: Path = REPO_ROOT / "config" / "tool_policy.json"

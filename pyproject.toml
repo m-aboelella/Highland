@@ -59,7 +59,9 @@ target-version = "py311"
 python_version = "3.13"
 files = [
   "src/highland/models/contracts.py",
+  "src/highland/maintenance.py",
   "src/highland/repository_quality.py",
+  "src/highland/settings.py",
   "src/highland/runtime/events.py",
   "src/highland/workflows/schema.py",
   "src/highland_mocks",
