@@ -262,6 +262,43 @@ class ScriptedRerankModel:
         )
 
 
+class DeterministicRerankModel:
+    """Offline reranker that scores token overlap without pretending to be a model."""
+
+    name = "deterministic-rerank"
+
+    def __init__(self, *, model: str = "deterministic-rerank") -> None:
+        self.model = model
+        self.requests: list[RerankRequest] = []
+
+    async def rerank(self, request: RerankRequest) -> RerankResponse:
+        self.requests.append(request.model_copy(deep=True))
+        query_terms = set(request.query.casefold().split())
+        scored = [
+            (
+                index,
+                len(query_terms.intersection(document.text.casefold().split()))
+                / max(1, len(query_terms)),
+            )
+            for index, document in enumerate(request.documents)
+        ]
+        ranked = sorted(scored, key=lambda item: (-item[1], item[0]))
+        if request.top_n is not None:
+            ranked = ranked[: request.top_n]
+        return RerankResponse(
+            results=[
+                RankedResult(
+                    index=index,
+                    relevance_score=score,
+                    document=request.documents[index],
+                )
+                for index, score in ranked
+            ],
+            usage=Usage(search_units=0),
+            metadata=simulated_metadata(self.model),
+        )
+
+
 def load_named_chat_script(name: str, *, scripts_dir: Path) -> ScriptedChatModel:
     path = scripts_dir / f"{name}.json"
     payload = json.loads(path.read_text(encoding="utf-8"))

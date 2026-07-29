@@ -7,10 +7,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .discover.conversations import ConversationStore
-from .models.provider import build_model_provider
+from .discover.service import ChatRequest, DiscoverService, SearchRequest
+from .models.provider import ModelProvider, build_model_provider
 from .retrieval.citations import CitationResolver
 from .retrieval.sources import MCPSourceReader
 from .retrieval.sync import IndexSynchronizer
+from .runtime.agent import AgentProfile
 from .runtime.approvals import ApprovalStore
 from .runtime.events import RunEventStore
 from .settings import HighlandSettings
@@ -33,7 +35,11 @@ class CreateMessageRequest(ApiModel):
     content: str = Field(min_length=1, max_length=100_000)
 
 
-def create_app(settings: HighlandSettings | None = None) -> FastAPI:
+def create_app(
+    settings: HighlandSettings | None = None,
+    *,
+    model_provider: ModelProvider | None = None,
+) -> FastAPI:
     configured = settings or HighlandSettings()
     workspace = WorkspacePaths.from_root(configured.workspace_dir)
     workspace.ensure()
@@ -41,6 +47,17 @@ def create_app(settings: HighlandSettings | None = None) -> FastAPI:
     approvals = ApprovalStore(workspace.runs / "approvals")
     run_events = RunEventStore(workspace.runs / "events")
     conversations = ConversationStore(workspace.conversations)
+    provider = model_provider or build_model_provider(configured)
+    discover = DiscoverService(
+        index_dir=workspace.indexes / "search",
+        conversations=conversations,
+        runs_dir=workspace.runs,
+        provider=provider,
+        profile=AgentProfile.load(configured.agent_profile_config),
+        tool_policy=configured.tool_policy_config,
+        connector_commands=configured.connector_commands,
+        connector_timeout_seconds=configured.connector_timeout_seconds,
+    )
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -54,7 +71,7 @@ def create_app(settings: HighlandSettings | None = None) -> FastAPI:
             ),
             index_dir=workspace.indexes / "search",
             reports_dir=workspace.synchronization,
-            embedding_model=build_model_provider(configured).embeddings,
+            embedding_model=provider.embeddings,
         )
 
     @app.get("/index/status")
@@ -155,6 +172,38 @@ def create_app(settings: HighlandSettings | None = None) -> FastAPI:
             "message_id": message.id,
             "status": "queued",
             "events_url": f"/runs/{run_id}/events",
+        }
+
+    @app.post("/discover/search")
+    async def discover_search(request: SearchRequest) -> dict[str, object]:
+        try:
+            result = await discover.search(request)
+        except FileNotFoundError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return result.model_dump(mode="json")
+
+    @app.post("/discover/chat")
+    async def discover_chat(request: ChatRequest) -> dict[str, object]:
+        run_id = f"run_{uuid4().hex}"
+        try:
+            message = conversations.append_message(
+                request.conversation_id,
+                role="user",
+                content=request.query,
+                run_id=run_id,
+            )
+            outcome = await discover.chat(request, run_id=run_id)
+            conversation = conversations.get(request.conversation_id)
+        except FileNotFoundError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        return {
+            **outcome.model_dump(mode="json"),
+            "conversation_id": request.conversation_id,
+            "message_id": message.id,
+            "sources": [
+                source.model_dump(mode="json")
+                for source in conversation.messages[-1].sources
+            ],
         }
 
     @app.get("/approvals/{approval_id}")

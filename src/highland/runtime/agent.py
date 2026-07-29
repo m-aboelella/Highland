@@ -111,12 +111,12 @@ class AgentLoop:
         user_message: str,
         scope: RunScope | None = None,
         documents: list[Document] | None = None,
+        prior_messages: list[Message] | None = None,
     ) -> RunOutcome:
         scope = scope or RunScope()
-        messages = [
-            Message(role=MessageRole.SYSTEM, content=self.profile.instructions),
-            Message(role=MessageRole.USER, content=user_message),
-        ]
+        messages = [Message(role=MessageRole.SYSTEM, content=self.profile.instructions)]
+        messages.extend(prior_messages or [])
+        messages.append(Message(role=MessageRole.USER, content=user_message))
         events: list[dict[str, Any]] = [{"type": "run_started", "run_id": run_id}]
         started = time.monotonic()
         totals = Usage(input_tokens=0, output_tokens=0)

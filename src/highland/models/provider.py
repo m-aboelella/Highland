@@ -18,7 +18,7 @@ from .budgets import (
 from .cohere import CohereChatModel, CohereEmbeddingModel, CohereRerankModel
 from .contracts import ChatModel, EmbeddingModel, RerankModel
 from .pricing import PriceCatalog
-from .scripted import DeterministicEmbeddingModel, ScriptedChatModel, ScriptedRerankModel
+from .scripted import DeterministicEmbeddingModel, DeterministicRerankModel, ScriptedChatModel
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,7 +34,7 @@ def build_model_provider(settings: HighlandSettings) -> ModelProvider:
         return ModelProvider(
             chat=ScriptedChatModel([], model="scripted-chat"),
             embeddings=DeterministicEmbeddingModel(model="deterministic-embedding"),
-            rerank=ScriptedRerankModel([], model="scripted-rerank"),
+            rerank=DeterministicRerankModel(),
         )
     if settings.cohere_api_key is None:
         raise ValueError("COHERE_API_KEY is required when HIGHLAND_MODEL_BACKEND=cohere")
