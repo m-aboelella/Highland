@@ -17,6 +17,18 @@ x-mock-service: &mock-service
     retries: 12
   restart: unless-stopped
 
+x-highland-environment: &highland-environment
+  COHERE_API_KEY: ${COHERE_API_KEY:-}
+  HIGHLAND_MODEL_BACKEND: ${HIGHLAND_MODEL_BACKEND:-scripted}
+  HIGHLAND_WORKSPACE_DIR: /data/runtime/highland
+  HIGHLAND_MOCK_CATALOG_URL: http://catalog:8099
+  HIGHLAND_CRM_URL: http://atlas-crm:8101
+  HIGHLAND_KNOWLEDGE_URL: http://archive:8102
+  HIGHLAND_SUPPORT_URL: http://relay-desk:8103
+  HIGHLAND_OBSERVABILITY_URL: http://beacon:8104
+  HIGHLAND_COMMUNICATIONS_URL: http://pulse:8105
+  HIGHLAND_PROJECTS_URL: http://track:8106
+
 services:
   catalog:
     <<: *mock-service
@@ -67,24 +79,13 @@ services:
       PORT: "8106"
     ports: ["8106:8106"]
 
-  highland-api:
+  highland-bootstrap:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    command: ["highland", "app"]
+    command: ["highland", "index", "sync"]
     environment:
-      COHERE_API_KEY: ${COHERE_API_KEY:-}
-      HIGHLAND_MODEL_BACKEND: ${HIGHLAND_MODEL_BACKEND:-scripted}
-      HIGHLAND_HOST: 0.0.0.0
-      HIGHLAND_PORT: "8080"
-      HIGHLAND_WORKSPACE_DIR: /data/runtime/highland
-      HIGHLAND_MOCK_CATALOG_URL: http://catalog:8099
-      HIGHLAND_CRM_URL: http://atlas-crm:8101
-      HIGHLAND_KNOWLEDGE_URL: http://archive:8102
-      HIGHLAND_SUPPORT_URL: http://relay-desk:8103
-      HIGHLAND_OBSERVABILITY_URL: http://beacon:8104
-      HIGHLAND_COMMUNICATIONS_URL: http://pulse:8105
-      HIGHLAND_PROJECTS_URL: http://track:8106
+      <<: *highland-environment
     volumes:
       - ./var:/data/runtime
     depends_on:
@@ -102,6 +103,22 @@ services:
         condition: service_healthy
       track:
         condition: service_healthy
+    restart: "no"
+
+  highland-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ["highland", "app"]
+    environment:
+      <<: *highland-environment
+      HIGHLAND_HOST: 0.0.0.0
+      HIGHLAND_PORT: "8080"
+    volumes:
+      - ./var:/data/runtime
+    depends_on:
+      highland-bootstrap:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [

@@ -8,10 +8,17 @@ tool-policy, approval, artifact, and workflow boundaries as real mode.
 
 ## Before you begin
 
-Start the complete local stack:
+The easiest live-model setup asks for only one Cohere API key:
 
 ```bash
-docker compose up --build
+./bootstrap.sh
+```
+
+For the deterministic, non-billable learning mode, start the complete local
+stack directly:
+
+```bash
+docker compose up --build --detach --wait
 ```
 
 Open the workspace at `http://localhost:3000`. The API is at
@@ -21,9 +28,12 @@ Open the workspace at `http://localhost:3000`. The API is at
 curl http://localhost:8080/health
 ```
 
-The default is `scripted`. All mutable state is under `var/`; checked-in
-fictional source data remains under `data/seed/`. MCP connectors are supervised
-stdio child processes of the API and call the mock systems over HTTP.
+Both commands synchronize the checked-in mock content into the local search
+index before the API starts. The direct Compose command defaults to `scripted`;
+`bootstrap.sh` explicitly selects Cohere mode after receiving a key. All
+mutable state is under `var/`; checked-in fictional source data remains under
+`data/seed/`. MCP connectors are supervised stdio child processes of the API
+and call the mock systems over HTTP.
 
 The executable tutorials below use the Python development environment because
 they expose exact assertions and trace records:

@@ -14,14 +14,27 @@ def test_compose_packages_complete_stack_with_one_runtime_mount() -> None:
         "beacon",
         "pulse",
         "track",
+        "highland-bootstrap",
         "highland-api",
         "web",
     ):
         assert f"  {service}:" in compose
-    assert compose.count("./var:/data/runtime") == 2
+    assert compose.count("./var:/data/runtime") == 3
     assert "HIGHLAND_MODEL_BACKEND: ${HIGHLAND_MODEL_BACKEND:-scripted}" in compose
     assert "COHERE_API_KEY: ${COHERE_API_KEY:-}" in compose
-    assert 'condition: service_healthy' in compose
+    assert "condition: service_healthy" in compose
+    assert 'command: ["highland", "index", "sync"]' in compose
+    assert "condition: service_completed_successfully" in compose
+
+
+def test_root_bootstrap_only_asks_for_a_key_and_waits_for_readiness() -> None:
+    script = (REPO_ROOT / "bootstrap.sh").read_text(encoding="utf-8")
+
+    assert "Cohere API key:" in script
+    assert "HIGHLAND_MODEL_BACKEND=cohere" in script
+    assert "COHERE_API_KEY=%s" in script
+    assert "docker compose up --build --detach --wait" in script
+    assert "http://localhost:3000" in script
 
 
 def test_container_context_excludes_runtime_state_and_secrets() -> None:

@@ -60,6 +60,32 @@ async def test_no_change_sync_makes_zero_embedding_calls(seed_dir, tmp_path) -> 
 
 
 @pytest.mark.asyncio
+async def test_sync_rebuilds_when_embedding_model_changes(seed_dir, tmp_path) -> None:
+    reader = MutableReader(seed_dir)
+    index = tmp_path / "indexes" / "search"
+    reports = tmp_path / "sync"
+    await BackfillService(
+        reader,
+        index_dir=index,
+        reports_dir=reports,
+        embedding_model=DeterministicEmbeddingModel(model="learning-model-a"),
+    ).backfill()
+    replacement = DeterministicEmbeddingModel(model="learning-model-b")
+
+    result = await IndexSynchronizer(
+        reader,
+        index_dir=index,
+        reports_dir=reports,
+        embedding_model=replacement,
+    ).sync()
+
+    assert result.promoted
+    assert result.changed_records > 0
+    assert result.embedded_chunks > 0
+    assert replacement.requests
+
+
+@pytest.mark.asyncio
 async def test_updating_one_ticket_embeds_only_affected_chunks(seed_dir, tmp_path) -> None:
     reader = MutableReader(seed_dir)
     index = tmp_path / "indexes" / "search"

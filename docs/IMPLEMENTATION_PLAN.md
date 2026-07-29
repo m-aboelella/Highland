@@ -227,7 +227,7 @@ User
 | M5 — Create artifacts | ✅ Implemented | 5/5 | Persistent editable cited outputs |
 | M6 — Automate workflows | ✅ Implemented | 7/7 | Small model-assisted workflow system |
 | M7 — Evaluation and reliability | ✅ Implemented | 5/5 | Deterministic and live-model evidence |
-| M8 — Self-hosted learning experience | ✅ Implemented | 4/4 | One-command stack and teaching path |
+| M8 — Self-hosted learning experience | ✅ Implemented | 5/5 | One-key stack and teaching path |
 
 ---
 
@@ -1895,6 +1895,33 @@ Suggested commit:
 
 ```text
 Add safe reset backup and educational release checks
+```
+
+## E8.5 — One-key indexed learning stack
+
+**Status:** ✅ Implemented
+**Implemented in:** this commit
+**Depends on:** E8.1, E8.2
+
+Delivered:
+
+- Added `./bootstrap.sh`, which securely prompts for the only required learner
+  input, stores it in ignored local configuration, selects Cohere mode, and
+  waits for the complete stack.
+- Added an idempotent Compose bootstrap service that synchronizes all indexable
+  mock content before the API and web workspace start.
+- Made a model-backend change automatically rebuild the derived vector index
+  instead of failing on incompatible embeddings.
+- Kept direct `docker compose up` as the keyless, deterministic teaching path.
+- Put the one-key route first in the README and linked both modes to the code
+  learning path.
+
+Verification:
+
+```bash
+.venv/bin/pytest tests/unit/test_container_packaging.py \
+  tests/integration/test_index_incremental_sync.py tests/docs/test_learning_path.py
+docker compose config --quiet
 ```
 
 ---

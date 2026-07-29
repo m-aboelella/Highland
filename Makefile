@@ -1,4 +1,7 @@
-.PHONY: setup generate dev test reset lint typecheck web-test web-build repository-check ci release-check
+.PHONY: bootstrap setup generate dev test reset lint typecheck web-test web-build repository-check ci release-check
+
+bootstrap:
+	./bootstrap.sh
 
 setup:
 	python3 -m venv .venv

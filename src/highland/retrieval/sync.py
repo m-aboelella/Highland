@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from highland.models.contracts import EmbeddingModel
 
 from .contracts import Chunk, SourceDocument, SyncManifest, SyncState, chunk_document
-from .faiss_store import EmbeddingIndex, FaissStore
+from .faiss_store import EmbeddingIndex, FaissStore, VectorIndexError
 from .ingestion import BackfillService, normalize_record, promote_snapshot, record_hash
 from .manifest import load_manifest
 from .sources import INDEXABLE_SOURCES, SourceReader, SourceReadError
@@ -122,9 +122,15 @@ class IndexSynchronizer:
             existing_vectors: dict[str, list[float]] = {}
             vector_path = self.index_dir / "vectors"
             if vector_path.exists():
-                existing_vectors = FaissStore.open(
-                    vector_path, expected_model_id=indexer.model_id
-                ).vectors_by_id()
+                try:
+                    existing_vectors = FaissStore.open(
+                        vector_path, expected_model_id=indexer.model_id
+                    ).vectors_by_id()
+                except VectorIndexError:
+                    # A learner may switch between scripted and Cohere mode.
+                    # Vectors from one embedding model cannot safely be reused
+                    # by another, so rebuild the derived index automatically.
+                    return await self.rebuild()
             missing_chunks = [chunk for chunk in chunks if chunk.id not in existing_vectors]
             existing_vectors.update(await indexer.embed_chunks(missing_chunks))
             embedded_count = len(missing_chunks)

@@ -4,9 +4,9 @@ Highland is a self-contained educational enterprise-agent workspace inspired by
 the product shape of Cohere North: **Discover**, **Create**, and **Automate**.
 It is not a clone and does not use Cohere branding or proprietary behavior.
 
-The repository currently contains the first foundation: a realistic fictional
-enterprise called **Summit Software** and six local “external” systems that can
-be reached through REST APIs or MCP:
+The repository contains a realistic fictional enterprise called **Summit
+Software** and six local “external” systems that can be reached through REST
+APIs or MCP:
 
 | System | Fictional product | Contents | Port |
 | --- | --- | --- | ---: |
@@ -22,7 +22,40 @@ boundaries just like real integrations. Write operations are stateful and
 idempotent. The checked-in seed—including downloadable Markdown source
 documents—can be restored at any time.
 
-## Quick start with Python
+## Easiest start: one key
+
+Install Docker, then run:
+
+```bash
+./bootstrap.sh
+```
+
+Paste a Cohere API key at the private prompt. That is the only configuration
+the guided setup asks for. The script:
+
+1. stores the key in the ignored local `.env` file with owner-only permissions;
+2. selects the real Cohere model backend;
+3. builds and starts the web app, API, six mock systems, and MCP connectors;
+4. synchronizes all searchable fictional enterprise content; and
+5. waits until the workspace is ready at <http://localhost:3000>.
+
+The initial index build and model interactions are potentially billable.
+Review the small learning-budget defaults shown in `.env.example` and set a
+provider-side spending limit before experimenting. Re-running `./bootstrap.sh`
+is safe: unchanged mock content is not embedded again.
+
+To see the same setup without a real model or API key, use deterministic
+scripted mode:
+
+```bash
+docker compose up --build --detach --wait
+```
+
+Both paths populate the search index before the API and UI start. Scripted
+responses are clearly simulated and are best for following the mechanics
+offline; the one-key path is best for exploring real model behavior.
+
+## Local Python setup
 
 Python 3.11+ is required.
 
@@ -84,15 +117,16 @@ Example client configuration for all six connectors is in
 overridden with environment variables such as
 `HIGHLAND_SUPPORT_URL=http://relay:8103`.
 
-## Docker Compose
+## Docker Compose details
 
 On a machine with Docker:
 
 ```bash
-docker compose up --build
+docker compose up --build --detach --wait
 ```
 
-This starts the complete scripted learning stack: the web workspace at
+This starts the complete scripted learning stack and synchronizes its search
+index: the web workspace at
 `http://localhost:3000`, the Highland API at `http://localhost:8080`, the
 catalog, and all six mock systems. All mutable mock and platform state is
 mounted beneath the single local `var/` directory. Once images have been
@@ -101,15 +135,17 @@ built, scripted mode does not require an internet connection.
 MCP adapters remain supervised stdio subprocesses inside the API container;
 they are deliberately not long-running Compose services.
 
-To opt into real, potentially billable Cohere calls without changing source
-code:
+For the smooth live-model setup, prefer `./bootstrap.sh`. The equivalent
+non-interactive Compose command is:
 
 ```bash
-HIGHLAND_MODEL_BACKEND=cohere COHERE_API_KEY=... docker compose up --build
+HIGHLAND_MODEL_BACKEND=cohere COHERE_API_KEY=... \
+  docker compose up --build --detach --wait
 ```
 
-The backend selection is explicit and defaults to `scripted`. Stop the stack
-with `docker compose down`; this preserves `var/`.
+The backend selection is explicit and defaults to `scripted` when the launcher
+has not created `.env`. Stop the stack with `docker compose down`; this
+preserves `var/`.
 
 ## Guided demo
 
