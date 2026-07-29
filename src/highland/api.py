@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 
 from .models.provider import build_model_provider
 from .retrieval.citations import CitationResolver
 from .retrieval.sources import MCPSourceReader
 from .retrieval.sync import IndexSynchronizer
+from .runtime.approvals import ApprovalStore
 from .settings import HighlandSettings
 from .workspace import WorkspacePaths
 
@@ -15,6 +16,7 @@ def create_app(settings: HighlandSettings | None = None) -> FastAPI:
     workspace = WorkspacePaths.from_root(configured.workspace_dir)
     workspace.ensure()
     app = FastAPI(title="Highland", version="0.1.0")
+    approvals = ApprovalStore(workspace.runs / "approvals")
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -54,6 +56,37 @@ def create_app(settings: HighlandSettings | None = None) -> FastAPI:
         if chunk is None:
             raise HTTPException(status_code=404, detail="Indexed chunk not found")
         return chunk.model_dump(mode="json")
+
+    @app.get("/approvals/{approval_id}")
+    async def get_approval(approval_id: str) -> dict[str, object]:
+        try:
+            return approvals.get(approval_id).model_dump(mode="json")
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Approval not found") from None
+
+    @app.post("/approvals/{approval_id}/approve")
+    async def approve(
+        approval_id: str,
+        reason: str | None = Body(default=None, embed=True),
+    ) -> dict[str, object]:
+        try:
+            return approvals.decide(approval_id, approve=True, reason=reason).model_dump(mode="json")
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Approval not found") from None
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
+    @app.post("/approvals/{approval_id}/reject")
+    async def reject(
+        approval_id: str,
+        reason: str | None = Body(default=None, embed=True),
+    ) -> dict[str, object]:
+        try:
+            return approvals.decide(approval_id, approve=False, reason=reason).model_dump(mode="json")
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Approval not found") from None
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
 
     return app
 

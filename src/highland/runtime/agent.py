@@ -24,6 +24,7 @@ from highland.models.contracts import (
     Usage,
 )
 
+from .approvals import ApprovalStore
 from .policy import RunScope, ToolRegistry, ToolRejected, ValidatedToolCall
 
 
@@ -92,11 +93,13 @@ class AgentLoop:
         tools: ToolRegistry,
         profile: AgentProfile,
         repository: RunRepository,
+        approvals: ApprovalStore | None = None,
     ) -> None:
         self.model = model
         self.tools = tools
         self.profile = profile
         self.repository = repository
+        self.approvals = approvals
 
     async def run(
         self,
@@ -172,6 +175,16 @@ class AgentLoop:
                     )
                     continue
                 if checked.policy.approval_required:
+                    approval = (
+                        self.approvals.create(
+                            run_id=run_id,
+                            tool_call_id=call.id,
+                            call=checked,
+                            reason=f"{checked.qualified_name} changes an external mock system",
+                        )
+                        if self.approvals
+                        else None
+                    )
                     outcome = RunOutcome(
                         run_id=run_id,
                         status=RunStatus.PAUSED,
@@ -182,6 +195,7 @@ class AgentLoop:
                             "tool": checked.qualified_name,
                             "arguments": checked.arguments,
                             "idempotency_key": checked.idempotency_key,
+                            "approval_id": approval.id if approval else None,
                         },
                     )
                     events.append({"type": "approval_required", **outcome.pending_call})

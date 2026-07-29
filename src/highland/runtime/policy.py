@@ -142,3 +142,8 @@ class ToolRegistry:
         if call.policy.approval_required:
             raise ToolRejected("Tool call requires approval", code="approval_required")
         return await self.gateway.call(call.qualified_name, call.arguments)
+
+    async def execute_approved(self, call: ValidatedToolCall) -> NormalizedToolResult:
+        if not call.policy.approval_required:
+            raise ToolRejected("Tool does not require approval", code="unexpected_approval")
+        return await self.gateway.call(call.qualified_name, call.arguments)
