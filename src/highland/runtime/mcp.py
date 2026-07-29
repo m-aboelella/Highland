@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from collections.abc import Mapping
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
@@ -89,7 +90,11 @@ class MCPGateway:
         stack = AsyncExitStack()
         try:
             async with asyncio.timeout(self.startup_timeout_seconds):
-                parameters = StdioServerParameters(command=command[0], args=list(command[1:]))
+                parameters = StdioServerParameters(
+                    command=command[0],
+                    args=list(command[1:]),
+                    env=dict(os.environ),
+                )
                 read, write = await stack.enter_async_context(stdio_client(parameters))
                 session = await stack.enter_async_context(
                     ClientSession(

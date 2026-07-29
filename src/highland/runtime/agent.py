@@ -24,7 +24,7 @@ from highland.models.contracts import (
     Usage,
 )
 
-from .approvals import ApprovalStore
+from .approvals import ApprovalService, ApprovalStatus, ApprovalStore
 from .events import RunEventStore
 from .policy import RunScope, ToolRegistry, ToolRejected, ValidatedToolCall
 
@@ -242,6 +242,79 @@ class AgentLoop:
         self._save(run_id, messages, events, outcome)
         return outcome
 
+    async def resume_after_approval(
+        self,
+        *,
+        run_id: str,
+        approval_service: ApprovalService,
+    ) -> RunOutcome:
+        state = self.repository.load(run_id)
+        previous = RunOutcome.model_validate(state["outcome"])
+        if previous.status is RunStatus.COMPLETED:
+            return previous
+        pending = previous.pending_call or {}
+        approval_id = pending.get("approval_id")
+        if not approval_id:
+            raise ValueError(f"run {run_id} has no durable approval checkpoint")
+        approval = approval_service.store.get(approval_id)
+        result = await approval_service.resume(approval_id)
+        messages = [Message.model_validate(item) for item in state["messages"]]
+        events = list(state["events"])
+        events.append(
+            {
+                "type": "approval_decision",
+                "approval_id": approval_id,
+                "decision": (
+                    "rejected"
+                    if approval.status is ApprovalStatus.REJECTED
+                    else "approved"
+                ),
+            }
+        )
+        tool_result = ToolResult(
+            tool_call_id=str(pending["tool_call_id"]),
+            content=(
+                f"Human approval decision recorded. {result.content}"
+            )[: self.profile.budgets.max_tool_result_chars],
+            is_error=result.is_error,
+        )
+        messages.append(Message(role=MessageRole.TOOL, tool_results=[tool_result]))
+        events.append({"type": "tool_result", **tool_result.model_dump(mode="json")})
+        response = await self.model.chat(
+            ChatRequest(
+                messages=self._bounded_messages(messages),
+                tools=self.tools.model_tools(),
+                required_capabilities=ModelCapabilities(tools=True),
+                logical_call_id=f"{run_id}:resume",
+            )
+        )
+        if response.message.tool_calls:
+            raise RuntimeError("resumed approval response requested another tool; start a new run step")
+        messages.append(response.message)
+        events.append(
+            {
+                "type": "model_call",
+                "step": "resume",
+                "finish_reason": response.finish_reason.value,
+                "usage": response.usage.model_dump(mode="json"),
+            }
+        )
+        events.extend(
+            {"type": "citation", **citation.model_dump(mode="json")}
+            for citation in response.citations
+        )
+        events.append({"type": "final", "content": response.message.content})
+        outcome = RunOutcome(
+            run_id=run_id,
+            status=RunStatus.COMPLETED,
+            content=response.message.content,
+            finish_reason=response.finish_reason,
+            citations=response.citations,
+            usage=_add_usage(previous.usage, response.usage),
+        )
+        self._save(run_id, messages, events, outcome)
+        return outcome
+
     def _bounded_messages(self, messages: list[Message]) -> list[Message]:
         budget = self.profile.budgets.max_context_chars
         selected: list[Message] = []
@@ -262,7 +335,10 @@ class AgentLoop:
         outcome: RunOutcome | None,
     ) -> None:
         if self.event_store:
-            persisted = len(self.event_store.replay(run_id))
+            try:
+                persisted = len(self.repository.load(run_id)["events"])
+            except FileNotFoundError:
+                persisted = 0
             for event in events[persisted:]:
                 payload = {key: value for key, value in event.items() if key != "type"}
                 self.event_store.append(run_id, event["type"], payload)

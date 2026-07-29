@@ -40,6 +40,7 @@ testpaths = ["tests"]
 addopts = "-q"
 markers = [
   "integration: opt-in tests that call live external services",
+  "live_scenario: opt-in tests that call Cohere for a complete scenario",
 ]
 
 [tool.ruff]
