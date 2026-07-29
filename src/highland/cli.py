@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -10,6 +11,7 @@ import uvicorn
 
 from .doctor import inspect_environment
 from .evaluation.retrieval import evaluate_retrieval
+from .evaluation.scenarios import LiveScenarioEvaluator
 from .models.provider import build_model_provider
 from .retrieval.ingestion import BackfillService
 from .retrieval.sources import INDEXABLE_SOURCES, MCPSourceReader
@@ -44,6 +46,13 @@ def build_parser() -> argparse.ArgumentParser:
     evaluation_commands = evaluation.add_subparsers(dest="evaluation_command", required=True)
     evaluation_commands.add_parser(
         "retrieval", help="Run deterministic retrieval and isolation evaluation."
+    )
+    scenario = evaluation_commands.add_parser(
+        "scenario", help="Run one explicitly opted-in Cohere scenario evaluation."
+    )
+    scenario.add_argument("scenario_id", help="Scenario filename without .json or manifest ID.")
+    evaluation_commands.add_parser(
+        "all", help="Run all explicitly opted-in Cohere scenario evaluations."
     )
     return parser
 
@@ -160,6 +169,40 @@ def main() -> None:
                 )
         print(f"reports={settings.workspace_dir / 'reports' / 'retrieval'}")
         if not report.passed:
+            raise SystemExit(1)
+    elif args.command == "eval" and args.evaluation_command in {"scenario", "all"}:
+        if (
+            os.getenv("HIGHLAND_RUN_LIVE_TESTS") != "1"
+            or settings.cohere_api_key is None
+        ):
+            raise SystemExit(
+                "live model evaluation requires HIGHLAND_RUN_LIVE_TESTS=1 and COHERE_API_KEY"
+            )
+        scenarios_dir = Path(__file__).resolve().parents[2] / "data" / "scenarios"
+        if args.evaluation_command == "scenario":
+            requested = args.scenario_id
+            paths = [
+                path
+                for path in scenarios_dir.glob("*.json")
+                if path.stem == requested
+                or json.loads(path.read_text(encoding="utf-8"))["id"] == requested
+            ]
+            if not paths:
+                raise SystemExit(f"unknown scenario: {requested}")
+        else:
+            paths = sorted(scenarios_dir.glob("*.json"))
+        evaluator = LiveScenarioEvaluator(
+            build_model_provider(settings).chat,
+            reports_dir=settings.workspace_dir / "reports" / "scenarios",
+            seed_dir=Path(__file__).resolve().parents[2] / "data" / "seed",
+        )
+        grades = [asyncio.run(evaluator.evaluate(path)) for path in paths]
+        for grade in grades:
+            print(
+                f"model-backed scenario={grade.scenario_id} "
+                f"result={'PASS' if grade.passed else 'FAIL'}"
+            )
+        if not all(grade.passed for grade in grades):
             raise SystemExit(1)
     else:
         raise AssertionError(f"Unhandled command: {args.command}")

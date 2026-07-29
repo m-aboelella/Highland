@@ -31,3 +31,17 @@ Run the deterministic retrieval benchmark with `highland eval retrieval`.
 It derives evidence queries from the scenario manifests, adds exact-ID,
 filtering, stale-record, and customer-isolation probes, then writes ignored JSON
 and Markdown reports under `var/highland/reports/retrieval/`.
+
+Billable end-to-end quality evidence is deliberately separate:
+
+```bash
+HIGHLAND_RUN_LIVE_TESTS=1 COHERE_API_KEY=... \
+  highland eval scenario customer-meeting-preparation
+HIGHLAND_RUN_LIVE_TESTS=1 COHERE_API_KEY=... highland eval all
+```
+
+Each report keeps model IDs, prompt version and hash, provider trace IDs, and
+usage. Citation and approval-policy failures are deterministic; semantic claim
+coverage, forbidden behavior, and response structure are model-judged. The
+harness supplies read-only evidence and never executes a proposed write, so
+repeated runs do not mutate the mock systems.
