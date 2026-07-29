@@ -1,7 +1,7 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
-import { CitedAnswer, EvidencePanel, TraceTimeline } from "./discover-workspace";
+import { CitedAnswer, DiscoverWorkspace, EvidencePanel, TraceTimeline } from "./discover-workspace";
 
 describe("TraceTimeline", () => {
   it("renders concise and expandable event details", () => {
@@ -64,5 +64,22 @@ describe("answer evidence", () => {
       "href",
       "mock://archive/doc_runbook",
     );
+  });
+});
+
+describe("DiscoverWorkspace", () => {
+  it("shows an actionable API error and leaves the form reusable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+    render(<DiscoverWorkspace />);
+
+    fireEvent.change(screen.getByLabelText("Ask Highland"), {
+      target: { value: "Prepare a customer briefing" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "A conversation could not be created.",
+    );
+    expect(screen.getByRole("button", { name: "Start discovery" })).toBeEnabled();
   });
 });

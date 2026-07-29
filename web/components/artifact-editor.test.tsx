@@ -83,6 +83,20 @@ describe("ArtifactEditor", () => {
     expect(close).not.toHaveBeenCalled();
   });
 
+  it("keeps an edit recoverable when saving fails", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    render(<ArtifactEditor initialArtifact={artifact} />);
+
+    fireEvent.change(screen.getByLabelText("Artifact Markdown"), {
+      target: { value: "Unsaved but recoverable" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save revision" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("offline");
+    expect(screen.getByText("unsaved")).toBeInTheDocument();
+    expect(screen.getByLabelText("Artifact Markdown")).toHaveValue("Unsaved but recoverable");
+  });
+
   it("shows unsupported factual claims after rerunning evidence coverage", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,

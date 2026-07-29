@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { WorkspaceShell } from "./workspace-shell";
 
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/artifacts",
+}));
+
 vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
 
 describe("WorkspaceShell", () => {
@@ -12,6 +16,11 @@ describe("WorkspaceShell", () => {
     for (const label of ["New chat", "Search", "Artifacts", "Agents", "Automations"]) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
+    expect(screen.getByRole("link", { name: "Search" })).toHaveAttribute("href", "/search");
+    expect(screen.getByRole("link", { name: "Artifacts" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(screen.getByText("Index checking")).toBeInTheDocument();
     expect(screen.getByText("scripted")).toBeInTheDocument();
     expect(screen.getByText("Single local workspace")).toBeInTheDocument();

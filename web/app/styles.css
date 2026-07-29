@@ -21,6 +21,10 @@ body {
 }
 
 a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .5; }
+:focus-visible { outline: 2px solid var(--mint); outline-offset: 3px; }
 
 .workspace-shell {
   display: grid;
@@ -29,8 +33,11 @@ a { color: inherit; text-decoration: none; }
 }
 
 .sidebar {
+  position: sticky;
+  top: 0;
   display: flex;
   flex-direction: column;
+  height: 100vh;
   padding: 24px 18px;
   background: color-mix(in srgb, var(--sidebar) 94%, transparent);
   border-right: 1px solid var(--line);
@@ -58,6 +65,7 @@ a { color: inherit; text-decoration: none; }
 nav { display: grid; gap: 5px; }
 nav a { padding: 10px 12px; border-radius: 8px; color: var(--muted); }
 nav a:hover { color: var(--ink); background: var(--panel); }
+nav a[aria-current="page"] { color: var(--ink); background: var(--panel); box-shadow: inset 2px 0 var(--mint); }
 .local-note { margin-top: auto; padding: 12px; color: var(--muted); font-size: 12px; }
 
 .workspace-main { min-width: 0; }
@@ -75,6 +83,8 @@ nav a:hover { color: var(--ink); background: var(--panel); }
 }
 .topbar b { color: var(--ink); font-weight: 600; }
 .dot { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: var(--mint); }
+.dot-missing, .dot-checking { background: var(--gold); }
+.dot-offline, .dot-unavailable, .dot-error { background: #e7a79a; }
 
 main { width: min(980px, calc(100% - 48px)); margin: 0 auto; padding: 10vh 0 60px; }
 h1 { max-width: 740px; margin: 0 0 18px; font: 500 clamp(35px, 6vw, 72px)/1.02 Georgia, serif; letter-spacing: -.035em; }
@@ -154,6 +164,10 @@ button { justify-self: end; padding: 10px 16px; color: #10231f; background: var(
 .artifact-list { display: grid; gap: 10px; margin-top: 32px; }
 .artifact-list > button { display: flex; justify-content: space-between; text-align: left; }
 .artifact-list small { margin-left: 18px; font-weight: 400; }
+.empty-state { display: grid; justify-items: start; gap: 5px; padding: 22px; color: var(--muted); background: var(--panel); border: 1px dashed var(--line); border-radius: 12px; }
+.empty-state strong { color: var(--ink); }
+.empty-state button { justify-self: start; margin-top: 8px; }
+.form-error { margin: 12px 0 0; padding: 10px 12px; color: #f0c1b7; background: #3a211e; border: 1px solid #74433a; border-radius: 8px; }
 .automation-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, .8fr); gap: 18px; margin-top: 34px; align-items: start; }
 .workflow-plan, .run-history { padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
 .workflow-plan { display: grid; gap: 12px; }
@@ -176,14 +190,34 @@ button { justify-self: end; padding: 10px 16px; color: #10231f; background: var(
 .approval-card { display: grid; gap: 4px; margin-top: 6px; padding: 8px; color: var(--gold); border: 1px solid var(--gold); }
 
 @media (max-width: 760px) {
-  .workspace-shell { grid-template-columns: 76px minmax(0, 1fr); }
-  .brand span:last-child, nav a { font-size: 0; }
-  nav a::first-letter { font-size: 15px; }
+  .workspace-shell { display: block; }
+  .sidebar {
+    z-index: 10;
+    display: grid;
+    height: auto;
+    padding: 10px 14px 8px;
+    overflow: hidden;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { margin: 0 4px 8px; }
+  .sidebar nav {
+    display: flex;
+    gap: 3px;
+    padding-bottom: 3px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .sidebar nav a { flex: 0 0 auto; padding: 7px 10px; font-size: 12px; }
+  nav a[aria-current="page"] { box-shadow: inset 0 -2px var(--mint); }
   .local-note { display: none; }
-  main { width: min(100% - 30px, 980px); }
+  .topbar { min-height: 48px; gap: 16px; padding: 0 15px; }
+  main { width: min(100% - 30px, 980px); padding-top: 48px; }
   .agent-grid { grid-template-columns: 1fr; }
   .answer-layout { grid-template-columns: 1fr; }
   .filters { align-items: stretch; flex-direction: column; }
   .artifact-editor > header { flex-direction: column; }
+  .artifact-list > button { align-items: start; flex-direction: column; gap: 4px; }
+  .artifact-list small { margin-left: 0; }
   .automation-grid { grid-template-columns: 1fr; }
 }

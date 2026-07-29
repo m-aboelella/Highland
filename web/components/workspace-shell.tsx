@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 type WorkspaceStatus = {
@@ -20,15 +21,17 @@ const fallback: WorkspaceStatus = {
 };
 
 const navigation = [
-  ["New chat", "/"],
-  ["Search", "/search"],
-  ["Artifacts", "/artifacts"],
-  ["Agents", "/agents"],
-  ["Automations", "/automations"],
+  { label: "New chat", href: "/" },
+  { label: "Search", href: "/search" },
+  { label: "Artifacts", href: "/artifacts" },
+  { label: "Agents", href: "/agents" },
+  { label: "Automations", href: "/automations" },
 ];
 
 export function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState(fallback);
+  const [connection, setConnection] = useState<"connecting" | "ready" | "offline">("connecting");
+  const pathname = usePathname();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -37,10 +40,24 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
       { signal: controller.signal },
     )
       .then((response) => (response.ok ? response.json() : Promise.reject(response)))
-      .then(setStatus)
-      .catch(() => undefined);
+      .then((payload: WorkspaceStatus) => {
+        setStatus(payload);
+        setConnection("ready");
+      })
+      .catch((error) => {
+        if ((error as Error).name !== "AbortError") setConnection("offline");
+      });
     return () => controller.abort();
   }, []);
+
+  const connectorState = connection === "offline"
+    ? "offline"
+    : connection === "connecting"
+      ? "checking"
+      : status.connectors.length
+        ? "configured"
+        : "missing";
+  const indexState = connection === "offline" ? "unavailable" : status.index.state;
 
   return (
     <div className="workspace-shell">
@@ -50,8 +67,14 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
           <span>{status.workspace}</span>
         </Link>
         <nav aria-label="Workspace">
-          {navigation.map(([label, href]) => (
-            <Link href={href} key={label}>{label}</Link>
+          {navigation.map(({ label, href }) => (
+            <Link
+              aria-current={pathname === href ? "page" : undefined}
+              href={href}
+              key={label}
+            >
+              {label}
+            </Link>
           ))}
         </nav>
         <p className="local-note">Single local workspace</p>
@@ -59,10 +82,16 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
       <div className="workspace-main">
         <header className="topbar">
           <span><b>Agent</b> General</span>
-          <span><i className="dot" /> Connectors {status.connectors.length || "checking"}</span>
-          <span><i className="dot" /> Index {status.index.state}</span>
-          <span><b>Mode</b> {status.model_mode}</span>
-          <span><b>Run</b> {status.run.state}</span>
+          <span>
+            <i className={`dot dot-${connectorState}`} />
+            Connectors {connection === "ready" ? status.connectors.length : connectorState}
+          </span>
+          <span>
+            <i className={`dot dot-${indexState}`} />
+            Index {indexState}
+          </span>
+          <span><b>Mode</b> {connection === "offline" ? "unavailable" : status.model_mode}</span>
+          <span><b>Run</b> {connection === "offline" ? "unavailable" : status.run.state}</span>
         </header>
         <main>{children}</main>
       </div>

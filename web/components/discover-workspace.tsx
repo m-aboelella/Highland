@@ -123,6 +123,8 @@ export function DiscoverWorkspace() {
   const [runId, setRunId] = useState<string>();
   const [events, setEvents] = useState<TraceEvent[]>([]);
   const [answer, setAnswer] = useState("");
+  const [error, setError] = useState<string>();
+  const [starting, setStarting] = useState(false);
   const [selectedEvidence, setSelectedEvidence] = useState<string>();
   const [artifact, setArtifact] = useState<ArtifactDocument>();
   const [creatingArtifact, setCreatingArtifact] = useState(false);
@@ -141,42 +143,72 @@ export function DiscoverWorkspace() {
       if (event.type === "model_delta") {
         setAnswer((current) => current + String(event.payload.text ?? ""));
       }
+      if (event.type === "error") {
+        setError(String(event.payload.message ?? "The run failed. Inspect the trace for details."));
+      }
       if (["final", "error", "run_cancelled"].includes(event.type)) stream.close();
     };
     for (const name of [
       "run_started", "retrieval", "model_call", "model_delta", "tool_call",
       "tool_result", "approval_required", "citation", "error", "final", "run_cancelled",
     ]) stream.addEventListener(name, receive);
+    stream.onerror = (event) => {
+      if (event instanceof MessageEvent) return;
+      setError("The live run stream disconnected. The persisted trace can still be replayed.");
+      stream.close();
+    };
     return () => stream.close();
   }, [runId]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setError(undefined);
     setEvents([]);
     setAnswer("");
+    setSelectedEvidence(undefined);
+    source.current?.close();
+    setRunId(undefined);
     const data = new FormData(event.currentTarget);
-    const content = String(data.get("question") ?? "");
+    const content = String(data.get("question") ?? "").trim();
     const customerId = String(data.get("customer_id") ?? "").trim();
     const sourceTypes = String(data.get("source_type") ?? "").trim();
-    let conversation = conversationId;
-    if (!conversation) {
-      const created = await fetch(`${API}/conversations`, { method: "POST" });
-      conversation = (await created.json()).id;
-      setConversationId(conversation);
+    if (!content) {
+      setError("Enter a question before starting discovery.");
+      return;
     }
-    const response = await fetch(`${API}/conversations/${conversation}/runs`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        content,
-        filters: {
-          customer_id: customerId || null,
-          source_types: sourceTypes ? [sourceTypes] : [],
-          allowed_visibilities: ["internal", "shared"],
-        },
-      }),
-    });
-    setRunId((await response.json()).run_id);
+    setStarting(true);
+    try {
+      let conversation = conversationId;
+      if (!conversation) {
+        const created = await fetch(`${API}/conversations`, { method: "POST" });
+        if (!created.ok) throw new Error("A conversation could not be created.");
+        conversation = String((await created.json()).id);
+        setConversationId(conversation);
+      }
+      const response = await fetch(`${API}/conversations/${conversation}/runs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content,
+          filters: {
+            customer_id: customerId || null,
+            source_types: sourceTypes ? [sourceTypes] : [],
+            allowed_visibilities: ["internal", "shared"],
+          },
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({})) as { detail?: string };
+        throw new Error(payload.detail ?? "Discovery could not be started.");
+      }
+      const payload = await response.json() as { run_id?: string };
+      if (!payload.run_id) throw new Error("The API did not return a run identifier.");
+      setRunId(payload.run_id);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Discovery could not be started.");
+    } finally {
+      setStarting(false);
+    }
   }
 
   const citations = events
@@ -186,9 +218,19 @@ export function DiscoverWorkspace() {
   const evidence = ((retrieval?.payload.results as Array<{ chunk: Evidence }> | undefined) ?? [])
     .map((item) => item.chunk);
   const refreshed = events.some((event) => event.type === "tool_result");
+  const runFinished = events.some((event) =>
+    ["final", "error", "run_cancelled"].includes(event.type),
+  );
+  const runActive = Boolean(runId && !runFinished);
 
   async function cancel() {
-    if (runId) await fetch(`${API}/runs/${runId}/cancel`, { method: "POST" });
+    if (!runId) return;
+    try {
+      const response = await fetch(`${API}/runs/${runId}/cancel`, { method: "POST" });
+      if (!response.ok) throw new Error("The run could not be cancelled.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The run could not be cancelled.");
+    }
   }
 
   async function turnIntoArtifact() {
@@ -196,6 +238,7 @@ export function DiscoverWorkspace() {
     setCreatingArtifact(true);
     try {
       const conversationResponse = await fetch(`${API}/conversations/${conversationId}`);
+      if (!conversationResponse.ok) throw new Error("The completed conversation could not be loaded.");
       const conversation = await conversationResponse.json() as {
         messages: Array<{ id: string; role: string; run_id?: string }>;
       };
@@ -214,6 +257,9 @@ export function DiscoverWorkspace() {
       });
       if (!response.ok) throw new Error("Artifact could not be generated.");
       setArtifact((await response.json()) as ArtifactDocument);
+      setError(undefined);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Artifact could not be generated.");
     } finally {
       setCreatingArtifact(false);
     }
@@ -226,7 +272,13 @@ export function DiscoverWorkspace() {
       <p>Search local enterprise knowledge, inspect its sources, and ask grounded follow-ups.</p>
       <form className="prompt" onSubmit={submit}>
         <label htmlFor="question">Ask Highland</label>
-        <textarea id="question" name="question" placeholder="Prepare me for the Northwind customer meeting…" />
+        <textarea
+          disabled={starting || runActive}
+          id="question"
+          name="question"
+          placeholder="Prepare me for the Northwind customer meeting…"
+          required
+        />
         <fieldset className="filters">
           <legend>Current filters</legend>
           <label>Customer <input name="customer_id" placeholder="cus_northwind" /></label>
@@ -234,10 +286,17 @@ export function DiscoverWorkspace() {
           <span>Visibility: internal + shared</span>
         </fieldset>
         <div className="run-actions">
-          {runId && <button className="secondary" onClick={cancel} type="button">Cancel run</button>}
-          <button type="submit">Start discovery</button>
+          {runActive && (
+            <button className="secondary" onClick={() => void cancel()} type="button">
+              Cancel run
+            </button>
+          )}
+          <button disabled={starting || runActive} type="submit">
+            {starting ? "Starting…" : runActive ? "Discovery running…" : "Start discovery"}
+          </button>
         </div>
       </form>
+      {error && <p className="form-error" role="alert">{error}</p>}
       {answer && (
         <div className="answer-layout">
           <article className="streaming-answer" aria-live="polite">

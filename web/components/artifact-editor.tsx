@@ -58,6 +58,7 @@ export function ArtifactEditor({
   const [preview, setPreview] = useState<RevisionPreview>();
   const [revisionCount, setRevisionCount] = useState<number>();
   const [coverage, setCoverage] = useState<CoverageReport>();
+  const [actionError, setActionError] = useState<string>();
   const headings = useMemo(
     () =>
       [...content.matchAll(/^#{1,6}\s+(.+)$/gm)].map((match) => match[1].trim()),
@@ -74,52 +75,73 @@ export function ArtifactEditor({
 
   async function save(nextContent = content, nextCitations = artifact.citations) {
     setSaveState("saving");
-    const response = await fetch(`${API}/artifacts/${artifact.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        expected_revision: artifact.revision,
-        content: nextContent,
-        citations: nextCitations,
-      }),
-    });
-    if (!response.ok) {
+    setActionError(undefined);
+    try {
+      const response = await fetch(`${API}/artifacts/${artifact.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expected_revision: artifact.revision,
+          content: nextContent,
+          citations: nextCitations,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error("Artifact changed elsewhere; reload before saving.");
+      }
+      const saved = (await response.json()) as ArtifactDocument;
+      setArtifact(saved);
+      setContent(saved.content);
+      setSaveState("saved");
+      setPreview(undefined);
+    } catch (caught) {
       setSaveState("unsaved");
-      throw new Error("Artifact changed elsewhere; reload before saving.");
+      setActionError(caught instanceof Error ? caught.message : "The artifact could not be saved.");
     }
-    const saved = (await response.json()) as ArtifactDocument;
-    setArtifact(saved);
-    setContent(saved.content);
-    setSaveState("saved");
-    setPreview(undefined);
   }
 
   async function loadRevisions() {
-    const response = await fetch(`${API}/artifacts/${artifact.id}/revisions`);
-    const revisions = (await response.json()) as unknown[];
-    setRevisionCount(revisions.length);
+    setActionError(undefined);
+    try {
+      const response = await fetch(`${API}/artifacts/${artifact.id}/revisions`);
+      if (!response.ok) throw new Error("Revision history could not be loaded.");
+      const revisions = (await response.json()) as unknown[];
+      setRevisionCount(revisions.length);
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : "Revision history is unavailable.");
+    }
   }
 
   async function reviseSection() {
-    const response = await fetch(`${API}/artifacts/${artifact.id}/sections/revise`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        expected_revision: artifact.revision,
-        heading: section,
-        instructions: revisionInstruction,
-      }),
-    });
-    if (!response.ok) throw new Error("Section revision could not be generated.");
-    setPreview((await response.json()) as RevisionPreview);
+    setActionError(undefined);
+    try {
+      const response = await fetch(`${API}/artifacts/${artifact.id}/sections/revise`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expected_revision: artifact.revision,
+          heading: section,
+          instructions: revisionInstruction,
+        }),
+      });
+      if (!response.ok) throw new Error("Section revision could not be generated.");
+      setPreview((await response.json()) as RevisionPreview);
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : "Section revision failed.");
+    }
   }
 
   async function checkEvidence() {
-    const response = await fetch(`${API}/artifacts/${artifact.id}/evidence-coverage`, {
-      method: "POST",
-    });
-    if (!response.ok) throw new Error("Evidence coverage could not be checked.");
-    setCoverage((await response.json()) as CoverageReport);
+    setActionError(undefined);
+    try {
+      const response = await fetch(`${API}/artifacts/${artifact.id}/evidence-coverage`, {
+        method: "POST",
+      });
+      if (!response.ok) throw new Error("Evidence coverage could not be checked.");
+      setCoverage((await response.json()) as CoverageReport);
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : "Evidence coverage is unavailable.");
+    }
   }
 
   function close() {
@@ -150,6 +172,7 @@ export function ArtifactEditor({
         {" · "}
         <a href={`${API}/artifacts/${artifact.id}/export.pdf`}>Export PDF</a>
       </p>
+      {actionError && <p className="form-error" role="alert">{actionError}</p>}
       <textarea
         aria-label="Artifact Markdown"
         value={content}

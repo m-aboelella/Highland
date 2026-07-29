@@ -1,5 +1,10 @@
 import { ArtifactsWorkspace } from "../../components/artifacts-workspace";
+import { WorkspaceShell } from "../../components/workspace-shell";
 
 export default function ArtifactsPage() {
-  return <ArtifactsWorkspace />;
+  return (
+    <WorkspaceShell>
+      <ArtifactsWorkspace />
+    </WorkspaceShell>
+  );
 }

@@ -26,58 +26,89 @@ export function AutomationsWorkspace() {
   const [versions, setVersions] = useState<number[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
   const [message, setMessage] = useState("Describe a goal to draft a workflow.");
+  const [busy, setBusy] = useState<"draft" | "save" | "publish" | "test" | null>(null);
 
   useEffect(() => {
     fetch(`${api}/workflow-runs`)
-      .then((response) => response.ok ? response.json() : [])
+      .then((response) => {
+        if (!response.ok) throw new Error("Run history could not be loaded.");
+        return response.json();
+      })
       .then(setRuns)
-      .catch(() => undefined);
+      .catch(() => setMessage("Run history is unavailable. Check that the Highland API is running."));
   }, []);
 
   async function draft() {
+    setBusy("draft");
     setMessage("Planning with the configured model…");
-    const response = await fetch(`${api}/workflows/draft`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ goal }),
-    });
-    const payload = await response.json();
-    if (!response.ok) return setMessage(payload.detail ?? "Planning failed.");
-    setWorkflow(payload.workflow);
-    setMessage(`Review the model rationale: ${payload.planner.rationale}`);
+    try {
+      const response = await fetch(`${api}/workflows/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goal }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.detail ?? "Planning failed.");
+      setWorkflow(payload.workflow);
+      setMessage(`Review the model rationale: ${payload.planner.rationale}`);
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Planning failed.");
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function save() {
     if (!workflow) return;
-    const response = await fetch(`${api}/workflows`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workflow }),
-    });
-    setMessage(response.ok ? "Draft saved. It is not published or scheduled." : "Save failed.");
+    setBusy("save");
+    try {
+      const response = await fetch(`${api}/workflows`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workflow }),
+      });
+      if (!response.ok) throw new Error("The workflow draft could not be saved.");
+      setMessage("Draft saved. It is not published or scheduled.");
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Save failed.");
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function publish() {
     if (!workflow) return;
-    const response = await fetch(`${api}/workflows/${workflow.id}/publish`, { method: "POST" });
-    const payload = await response.json();
-    if (response.ok) {
+    setBusy("publish");
+    try {
+      const response = await fetch(`${api}/workflows/${workflow.id}/publish`, { method: "POST" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.detail ?? "The workflow could not be published.");
       setVersions((current) => [...current, payload.version]);
       setMessage(`Published immutable version ${payload.version}.`);
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Publish failed.");
+    } finally {
+      setBusy(null);
     }
   }
 
   async function testRun() {
     if (!workflow) return;
-    const response = await fetch(`${api}/workflows/${workflow.id}/runs`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ test: true }),
-    });
-    const run = await response.json();
-    if (response.ok) {
+    setBusy("test");
+    try {
+      const response = await fetch(`${api}/workflows/${workflow.id}/runs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ test: true }),
+      });
+      const run = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(run.detail ?? "The test run could not be started.");
       setRuns((current) => [run, ...current]);
       setMessage("Test run finished without publishing or scheduling.");
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Test run failed.");
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -94,7 +125,9 @@ export function AutomationsWorkspace() {
             onChange={(event) => setGoal(event.target.value)}
             placeholder="Every Monday, review active enterprise customer health…"
           />
-          <button onClick={draft} disabled={!goal.trim()}>Draft plan</button>
+          <button onClick={() => void draft()} disabled={!goal.trim() || busy !== null}>
+            {busy === "draft" ? "Drafting…" : "Draft plan"}
+          </button>
           <p role="status">{message}</p>
           {workflow && (
             <>
@@ -127,9 +160,15 @@ export function AutomationsWorkspace() {
                 ))}
               </ol>
               <div className="workflow-actions">
-                <button className="secondary" onClick={save}>Save draft</button>
-                <button className="secondary" onClick={testRun}>Test run</button>
-                <button onClick={publish}>Publish</button>
+                <button className="secondary" disabled={busy !== null} onClick={() => void save()}>
+                  {busy === "save" ? "Saving…" : "Save draft"}
+                </button>
+                <button className="secondary" disabled={busy !== null} onClick={() => void testRun()}>
+                  {busy === "test" ? "Running…" : "Test run"}
+                </button>
+                <button disabled={busy !== null} onClick={() => void publish()}>
+                  {busy === "publish" ? "Publishing…" : "Publish"}
+                </button>
               </div>
               <p>Version history: {versions.length ? versions.join(", ") : "No published versions"}</p>
             </>
