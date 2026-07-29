@@ -1,3 +1,4 @@
+from .planner import PlannerRecord, WorkflowDraft, WorkflowPlanner, WorkflowPlanningError
 from .repository import WorkflowRepository
 from .schema import (
     ApprovalNode,
@@ -18,12 +19,16 @@ __all__ = [
     "GenerateNode",
     "NodeInput",
     "OutputReference",
+    "PlannerRecord",
     "RetrieveNode",
     "ToolNode",
     "TriggerNode",
     "ValueType",
     "WorkflowDefinition",
+    "WorkflowDraft",
     "WorkflowEdge",
+    "WorkflowPlanner",
+    "WorkflowPlanningError",
     "WorkflowRepository",
     "WorkflowVersion",
 ]
