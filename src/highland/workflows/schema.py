@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Any, Literal
@@ -125,6 +126,12 @@ class WorkflowDefinition(WorkflowModel):
             incoming[edge.target].append(edge.source)
             if edge.loop_over and edge.loop_over.node_id not in nodes:
                 raise ValueError(f"loop references missing node: {edge.loop_over.node_id}")
+            if edge.condition and not _CONDITION.fullmatch(edge.condition.strip()):
+                raise ValueError(f"unsafe or invalid branch expression: {edge.condition}")
+        if sum(edge.loop_over is not None for edge in self.edges) > 1:
+            raise ValueError("workflow supports at most one record loop")
+        if sum(edge.condition is not None for edge in self.edges) > 2:
+            raise ValueError("workflow supports one conditional branch")
         trigger = triggers[0]
         if incoming[trigger.id]:
             raise ValueError("trigger cannot have incoming edges")
@@ -157,6 +164,10 @@ class WorkflowDefinition(WorkflowModel):
             elif isinstance(node, GenerateNode):
                 references.append(node.prompt)
             for item in references:
+                if item.reference and item.reference.node_id == "$item":
+                    if not any(edge.target == node.id and edge.loop_over for edge in self.edges):
+                        raise ValueError(f"node {node.id} uses $item outside a record loop")
+                    continue
                 if item.reference and item.reference.node_id not in nodes:
                     raise ValueError(
                         f"node {node.id} references missing output {item.reference.node_id}"
@@ -174,6 +185,12 @@ class WorkflowDefinition(WorkflowModel):
             if len(approvals) != 1 or approvals[0].id not in _ancestors(tool.id, incoming):
                 raise ValueError(f"write tool {tool.id} requires a preceding approval node")
         return self
+
+
+_CONDITION = re.compile(
+    r"[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*"
+    r"(?:\s*(?:==|!=|>=|<=|>|<)\s*(?:true|false|null|-?\d+(?:\.\d+)?|\"[^\"\\]*\"))?"
+)
 
 
 def _ancestors(node_id: str, incoming: dict[str, list[str]]) -> set[str]:

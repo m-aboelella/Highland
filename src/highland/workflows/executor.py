@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import re
 import time
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -171,6 +173,18 @@ class WorkflowExecutor:
                 if record.status is NodeRunStatus.COMPLETED:
                     continue
                 self._check_time(started)
+                incoming = [edge for edge in definition.edges if edge.target == node.id]
+                active = [
+                    edge
+                    for edge in incoming
+                    if run.nodes[edge.source].status is NodeRunStatus.COMPLETED
+                    and (edge.condition is None or evaluate_condition(edge.condition, run))
+                ]
+                if incoming and not active:
+                    record.status = NodeRunStatus.SKIPPED
+                    record.completed_at = datetime.now(UTC)
+                    self._save(run)
+                    continue
                 if isinstance(node, ApprovalNode) and node.id not in approved_nodes:
                     record.status = NodeRunStatus.WAITING_APPROVAL
                     record.inputs = {"tool_node_id": node.tool_node_id, "reason": node.reason}
@@ -181,12 +195,36 @@ class WorkflowExecutor:
                 record.attempts += 1
                 record.started_at = datetime.now(UTC)
                 node_started = time.monotonic()
-                inputs = _node_inputs(node, run)
-                record.inputs = inputs
                 try:
-                    output, usage = await self._execute_node(
-                        node, inputs=inputs, run=run, scope=scope
-                    )
+                    loop_edge = next((edge for edge in active if edge.loop_over), None)
+                    if loop_edge:
+                        records = resolve_reference(loop_edge.loop_over, run)
+                        if not isinstance(records, list):
+                            raise TypeError("workflow loop input must be a list")
+                        if len(records) > loop_edge.max_iterations:
+                            raise RuntimeError(
+                                f"workflow loop exceeds {loop_edge.max_iterations} iterations"
+                            )
+                        iterations = []
+                        total_usage = Usage(input_tokens=0, output_tokens=0)
+                        for index, item in enumerate(records):
+                            inputs = _node_inputs(node, run, loop_item=item)
+                            isolated_scope = _loop_scope(scope, item)
+                            output, usage = await self._execute_node(
+                                node, inputs=inputs, run=run, scope=isolated_scope
+                            )
+                            iterations.append(
+                                {"index": index, "record": item, "output": output}
+                            )
+                            total_usage = _add_usage(total_usage, usage)
+                        record.inputs = {"iterations": [item["record"] for item in iterations]}
+                        output, usage = iterations, total_usage
+                    else:
+                        inputs = _node_inputs(node, run)
+                        record.inputs = inputs
+                        output, usage = await self._execute_node(
+                            node, inputs=inputs, run=run, scope=scope
+                        )
                 except Exception as error:  # noqa: BLE001 - persist bounded workflow failures
                     record.status = NodeRunStatus.FAILED
                     record.error = f"{type(error).__name__}: {error}"[:2000]
@@ -293,10 +331,15 @@ class WorkflowExecutor:
         self.repository.save(run)
 
 
-def resolve_reference(reference: OutputReference, run: WorkflowRun) -> Any:
-    if reference.node_id not in run.nodes:
-        raise ValueError(f"unknown node output {reference.node_id}")
-    value = run.nodes[reference.node_id].output
+def resolve_reference(
+    reference: OutputReference, run: WorkflowRun, *, loop_item: Any = None
+) -> Any:
+    if reference.node_id == "$item":
+        value = loop_item
+    else:
+        if reference.node_id not in run.nodes:
+            raise ValueError(f"unknown node output {reference.node_id}")
+        value = run.nodes[reference.node_id].output
     if reference.path:
         for part in reference.path.split("."):
             if isinstance(value, list):
@@ -308,23 +351,96 @@ def resolve_reference(reference: OutputReference, run: WorkflowRun) -> Any:
     return value
 
 
-def resolve_input(value: NodeInput, run: WorkflowRun) -> Any:
-    return resolve_reference(value.reference, run) if value.reference else value.value
+def resolve_input(value: NodeInput, run: WorkflowRun, *, loop_item: Any = None) -> Any:
+    return (
+        resolve_reference(value.reference, run, loop_item=loop_item)
+        if value.reference
+        else value.value
+    )
 
 
-def _node_inputs(node: Any, run: WorkflowRun) -> dict[str, Any]:
-    resolved = {name: resolve_input(value, run) for name, value in node.inputs.items()}
+def _node_inputs(node: Any, run: WorkflowRun, *, loop_item: Any = None) -> dict[str, Any]:
+    resolved = {
+        name: resolve_input(value, run, loop_item=loop_item)
+        for name, value in node.inputs.items()
+    }
     if isinstance(node, RetrieveNode):
-        resolved["query"] = resolve_input(node.query, run)
+        resolved["query"] = resolve_input(node.query, run, loop_item=loop_item)
         if node.customer_id:
-            resolved["customer_id"] = resolve_input(node.customer_id, run)
+            resolved["customer_id"] = resolve_input(
+                node.customer_id, run, loop_item=loop_item
+            )
     elif isinstance(node, ToolNode):
         resolved.update(
-            {name: resolve_input(value, run) for name, value in node.arguments.items()}
+            {
+                name: resolve_input(value, run, loop_item=loop_item)
+                for name, value in node.arguments.items()
+            }
         )
     elif isinstance(node, GenerateNode):
-        resolved["prompt"] = resolve_input(node.prompt, run)
+        resolved["prompt"] = resolve_input(node.prompt, run, loop_item=loop_item)
     return resolved
+
+
+_EXPRESSION = re.compile(
+    r"(?P<reference>[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*)"
+    r"(?:\s*(?P<operator>==|!=|>=|<=|>|<)\s*(?P<value>.+))?"
+)
+
+
+def evaluate_condition(expression: str, run: WorkflowRun) -> bool:
+    match = _EXPRESSION.fullmatch(expression.strip())
+    if not match:
+        raise ValueError("invalid workflow branch expression")
+    reference, _, path = match.group("reference").partition(".")
+    value = resolve_reference(OutputReference(node_id=reference, path=path), run)
+    operator = match.group("operator")
+    if operator is None:
+        return bool(value)
+    try:
+        expected = json.loads(match.group("value"))
+    except json.JSONDecodeError as error:
+        raise ValueError("branch comparison value must be JSON") from error
+    operations = {
+        "==": lambda: value == expected,
+        "!=": lambda: value != expected,
+        ">": lambda: value > expected,
+        ">=": lambda: value >= expected,
+        "<": lambda: value < expected,
+        "<=": lambda: value <= expected,
+    }
+    try:
+        return bool(operations[operator]())
+    except TypeError as error:
+        raise ValueError("branch values are not comparable") from error
+
+
+def _loop_scope(scope: RunScope, item: Any) -> RunScope:
+    if not isinstance(item, dict) or not isinstance(item.get("customer_id"), str):
+        return scope
+    customer_id = item["customer_id"]
+    if scope.allowed_customers and customer_id not in scope.allowed_customers:
+        raise ValueError(f"loop customer {customer_id!r} is outside this run's scope")
+    return RunScope(
+        allowed_customers=frozenset({customer_id}),
+        allowed_visibilities=scope.allowed_visibilities,
+        allow_writes=scope.allow_writes,
+    )
+
+
+def _add_usage(left: Usage, right: Usage) -> Usage:
+    def add(name: str) -> int | float | None:
+        first = getattr(left, name)
+        second = getattr(right, name)
+        return None if first is None and second is None else (first or 0) + (second or 0)
+
+    return Usage(
+        input_tokens=add("input_tokens"),
+        output_tokens=add("output_tokens"),
+        billed_input_tokens=add("billed_input_tokens"),
+        billed_output_tokens=add("billed_output_tokens"),
+        search_units=add("search_units"),
+    )
 
 
 def _ordered_nodes(definition: WorkflowDefinition) -> list[Any]:
