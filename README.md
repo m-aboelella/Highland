@@ -102,3 +102,6 @@ This makes the canonical prompt genuinely multi-source:
 See [Architecture](docs/ARCHITECTURE.md), [Mock ecosystem](docs/MOCK_ECOSYSTEM.md),
 [data contract](docs/DATA_CONTRACT.md), and
 [showcase scenarios](docs/SCENARIOS.md) for the design and learning path.
+The milestone-by-milestone delivery roadmap, implementation status, and
+one-epic-per-commit working agreement are in the
+[implementation plan](docs/IMPLEMENTATION_PLAN.md).
