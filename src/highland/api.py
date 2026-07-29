@@ -30,7 +30,19 @@ from .runtime.agent import AgentProfile
 from .runtime.approvals import ApprovalStore
 from .runtime.cancellation import RunCancellationStore
 from .runtime.events import RunEventStore
+from .runtime.mcp import MCPGateway
+from .runtime.policy import ToolRegistry
 from .settings import HighlandSettings
+from .workflows import (
+    PlannerRecord,
+    WorkflowDefinition,
+    WorkflowExecutor,
+    WorkflowPlanner,
+    WorkflowPlanningError,
+    WorkflowRepository,
+    WorkflowRunRepository,
+)
+from .workflows.schedules import WorkflowScheduleRepository
 from .workspace import WorkspacePaths
 
 
@@ -89,6 +101,26 @@ class ReviseArtifactSectionRequest(ApiModel):
     instructions: str = Field(min_length=1, max_length=20_000)
 
 
+class DraftWorkflowRequest(ApiModel):
+    goal: str = Field(min_length=1, max_length=20_000)
+
+
+class SaveWorkflowRequest(ApiModel):
+    workflow: WorkflowDefinition
+    planner: PlannerRecord | None = None
+
+
+class RunWorkflowRequest(ApiModel):
+    version: int | None = Field(default=None, ge=1)
+    test: bool = True
+    trigger: dict[str, object] = Field(default_factory=dict)
+
+
+class ScheduleWorkflowRequest(ApiModel):
+    version: int = Field(ge=1)
+    interval_seconds: int = Field(ge=60)
+
+
 def create_app(
     settings: HighlandSettings | None = None,
     *,
@@ -112,6 +144,9 @@ def create_app(
     provider = model_provider or build_model_provider(configured)
     artifact_generator = ArtifactGenerator(provider.chat, artifacts)
     coverage_checker = EvidenceCoverageChecker(provider.chat)
+    workflows = WorkflowRepository(workspace.workflows)
+    workflow_runs = WorkflowRunRepository(workspace.runs / "workflows")
+    workflow_schedules = WorkflowScheduleRepository(workspace.workflows / "schedules")
     discover = DiscoverService(
         index_dir=workspace.indexes / "search",
         conversations=conversations,
@@ -148,6 +183,153 @@ def create_app(
     async def list_agents() -> list[dict[str, object]]:
         profile = AgentProfile.load(configured.agent_profile_config)
         return [profile.model_dump(mode="json")]
+
+    @app.post("/workflows/draft")
+    async def draft_workflow(request: DraftWorkflowRequest) -> dict[str, object]:
+        async with MCPGateway(
+            configured.connector_commands,
+            startup_timeout_seconds=configured.connector_timeout_seconds,
+            request_timeout_seconds=configured.connector_timeout_seconds,
+        ) as gateway:
+            registry = ToolRegistry.from_file(gateway, configured.tool_policy_config)
+            planner = WorkflowPlanner(
+                provider.chat,
+                tools=gateway.model_tools(),
+                policies=registry.model_tool_policies(),
+            )
+            try:
+                draft = await planner.draft(request.goal)
+            except WorkflowPlanningError as error:
+                raise HTTPException(status_code=422, detail=str(error)) from error
+        return draft.model_dump(mode="json")
+
+    @app.post("/workflows", status_code=status.HTTP_201_CREATED)
+    async def save_workflow(request: SaveWorkflowRequest) -> dict[str, object]:
+        saved = workflows.save_draft(request.workflow)
+        payload = saved.model_dump(mode="json")
+        if request.planner:
+            payload["planner"] = request.planner.model_dump(mode="json")
+        return payload
+
+    @app.get("/workflows")
+    async def list_workflows() -> list[dict[str, object]]:
+        return [workflow.model_dump(mode="json") for workflow in workflows.list()]
+
+    @app.get("/workflows/{workflow_id}")
+    async def get_workflow(workflow_id: str) -> dict[str, object]:
+        try:
+            draft = workflows.get_draft(workflow_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Workflow not found") from None
+        return {
+            "draft": draft.model_dump(mode="json"),
+            "versions": [
+                version.model_dump(mode="json")
+                for version in workflows.list_versions(workflow_id)
+            ],
+        }
+
+    @app.post("/workflows/{workflow_id}/publish")
+    async def publish_workflow(workflow_id: str) -> dict[str, object]:
+        try:
+            return workflows.publish(workflow_id).model_dump(mode="json")
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Workflow draft not found") from None
+
+    @app.post("/workflows/{workflow_id}/runs")
+    async def run_workflow(
+        workflow_id: str, request: RunWorkflowRequest
+    ) -> dict[str, object]:
+        if request.test:
+            try:
+                definition = workflows.get_draft(workflow_id)
+            except FileNotFoundError:
+                raise HTTPException(status_code=404, detail="Workflow draft not found") from None
+            version = request.version or 0
+        else:
+            if request.version is None:
+                raise HTTPException(status_code=422, detail="Published version is required")
+            try:
+                published = workflows.get_version(workflow_id, request.version)
+            except FileNotFoundError:
+                raise HTTPException(status_code=404, detail="Workflow version not found") from None
+            definition, version = published.definition, published.version
+        run_id = f"wrun_{uuid4().hex}"
+        run_events.append(
+            run_id,
+            "run_started",
+            {"workflow_id": workflow_id, "workflow_version": version, "test": request.test},
+        )
+        async with MCPGateway(
+            configured.connector_commands,
+            startup_timeout_seconds=configured.connector_timeout_seconds,
+            request_timeout_seconds=configured.connector_timeout_seconds,
+        ) as gateway:
+            registry = ToolRegistry.from_file(gateway, configured.tool_policy_config)
+            run = await WorkflowExecutor(
+                model=provider.chat,
+                tools=registry,
+                repository=workflow_runs,
+                approvals=approvals,
+            ).run(
+                definition,
+                run_id=run_id,
+                workflow_version=version,
+                trigger=request.trigger,
+            )
+        for node in run.nodes.values():
+            event_type = "model_call" if definition.model_dump()["nodes"][
+                [item.id for item in definition.nodes].index(node.node_id)
+            ]["kind"] == "generate" else "tool_call"
+            run_events.append(
+                run_id,
+                event_type,
+                {
+                    "node_id": node.node_id,
+                    "status": node.status.value,
+                    "attempts": node.attempts,
+                    "duration_ms": node.duration_ms,
+                    "usage": node.usage.model_dump(mode="json"),
+                },
+            )
+        terminal_event = (
+            "run_completed"
+            if run.status.value == "completed"
+            else "approval_required"
+            if run.status.value == "paused"
+            else "run_failed"
+        )
+        run_events.append(
+            run_id,
+            terminal_event,
+            {
+                "workflow_id": workflow_id,
+                "workflow_version": version,
+                "status": run.status.value,
+            },
+        )
+        return {
+            **run.model_dump(mode="json"),
+            "trace_url": f"/runs/{run_id}/trace",
+        }
+
+    @app.get("/workflow-runs")
+    async def list_workflow_runs() -> list[dict[str, object]]:
+        return [run.model_dump(mode="json") for run in workflow_runs.list()]
+
+    @app.post("/workflows/{workflow_id}/schedules", status_code=status.HTTP_201_CREATED)
+    async def schedule_workflow(
+        workflow_id: str, request: ScheduleWorkflowRequest
+    ) -> dict[str, object]:
+        try:
+            published = workflows.get_version(workflow_id, request.version)
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=422, detail="Only a published workflow version can be scheduled"
+            ) from None
+        return workflow_schedules.create(
+            published, interval_seconds=request.interval_seconds
+        ).model_dump(mode="json")
 
     @app.post("/artifacts", status_code=status.HTTP_201_CREATED)
     async def create_artifact(request: CreateArtifactRequest) -> dict[str, object]:

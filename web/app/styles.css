@@ -154,6 +154,26 @@ button { justify-self: end; padding: 10px 16px; color: #10231f; background: var(
 .artifact-list { display: grid; gap: 10px; margin-top: 32px; }
 .artifact-list > button { display: flex; justify-content: space-between; text-align: left; }
 .artifact-list small { margin-left: 18px; font-weight: 400; }
+.automation-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, .8fr); gap: 18px; margin-top: 34px; align-items: start; }
+.workflow-plan, .run-history { padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+.workflow-plan { display: grid; gap: 12px; }
+.workflow-plan textarea { min-height: 100px; padding: 12px; resize: vertical; color: var(--ink); background: #0b1917; border: 1px solid var(--line); }
+.workflow-plan > header { display: flex; justify-content: space-between; align-items: start; border-top: 1px solid var(--line); padding-top: 18px; }
+.workflow-plan h2, .run-history h2 { margin: 0; font: 500 25px Georgia, serif; }
+.workflow-plan small, .workflow-plan header span, .workflow-plan > p, .run-history p { color: var(--muted); font-size: 12px; }
+.workflow-plan label { display: grid; gap: 5px; color: var(--muted); font-size: 12px; }
+.workflow-plan input { padding: 8px; color: var(--ink); background: #0b1917; border: 1px solid var(--line); }
+.node-editor { display: grid; gap: 8px; padding: 0; list-style: none; }
+.node-editor li { display: grid; grid-template-columns: 90px 1fr auto; gap: 8px; align-items: center; padding: 10px; background: #0b1917; border-left: 3px solid var(--gold); }
+.node-editor b { color: var(--gold); font-size: 11px; text-transform: uppercase; }
+.node-editor code { color: var(--muted); font-size: 11px; }
+.workflow-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.run-history { display: grid; gap: 10px; }
+.run-history article { display: grid; gap: 4px; padding: 12px; background: #0b1917; border: 1px solid var(--line); }
+.run-history article > b { color: var(--mint); text-transform: capitalize; }
+.run-history article > span { color: var(--muted); font-size: 11px; }
+.run-history a { color: var(--mint); font-size: 12px; }
+.approval-card { display: grid; gap: 4px; margin-top: 6px; padding: 8px; color: var(--gold); border: 1px solid var(--gold); }
 
 @media (max-width: 760px) {
   .workspace-shell { grid-template-columns: 76px minmax(0, 1fr); }
@@ -165,4 +185,5 @@ button { justify-self: end; padding: 10px 16px; color: #10231f; background: var(
   .answer-layout { grid-template-columns: 1fr; }
   .filters { align-items: stretch; flex-direction: column; }
   .artifact-editor > header { flex-direction: column; }
+  .automation-grid { grid-template-columns: 1fr; }
 }

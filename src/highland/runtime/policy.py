@@ -91,6 +91,13 @@ class ToolRegistry:
             if self._policy_for_name(definition.name).mode is ToolMode.READ
         ]
 
+    def model_tool_policies(self) -> dict[str, ToolPolicy]:
+        """Return the effective policy for each currently available model tool."""
+        return {
+            name: self._policy_for_name(name)
+            for name in sorted(self._tools)
+        }
+
     def _policy_for_name(self, qualified_name: str) -> ToolPolicy:
         tool = self._tools.get(qualified_name)
         return self.policy_for(tool) if tool else self._policies["*"]
