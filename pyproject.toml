@@ -40,10 +40,14 @@ packages = ["src/highland", "src/highland_mocks"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-q --strict-markers"
 markers = [
-  "integration: opt-in tests that call live external services",
-  "live_scenario: opt-in tests that call Cohere for a complete scenario",
+  "unit: isolated deterministic tests",
+  "integration_local: tests across local Highland components",
+  "acceptance_scripted: end-to-end scenarios using scripted providers",
+  "live_model: explicitly opted-in tests that call Cohere",
+  "integration: legacy alias for live_model",
+  "live_scenario: legacy alias for live_model scenario evaluations",
 ]
 
 [tool.ruff]

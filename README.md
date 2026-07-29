@@ -128,3 +128,7 @@ potentially billable model calls are intended. Model prices and effective dates
 are explicit in `config/model_prices.json`; unknown production rates fail
 closed once usage is observed and must be configured for the applicable
 commercial agreement.
+
+The default `pytest` suite is hermetic and non-billable. See
+[Testing Highland](docs/TESTING.md) for the unit, local integration, scripted
+acceptance, and explicitly opted-in live-model commands.
