@@ -23,8 +23,15 @@ from .schema import (
     WorkflowEdge,
     WorkflowVersion,
 )
+from .weekly_health import (
+    AccountHealth,
+    WeeklyCustomerHealthRunner,
+    WeeklyHealthRun,
+    WeeklyHealthRunRepository,
+)
 
 __all__ = [
+    "AccountHealth",
     "ApprovalNode",
     "GenerateNode",
     "LocalWorkflowScheduler",
@@ -37,6 +44,9 @@ __all__ = [
     "ToolNode",
     "TriggerNode",
     "ValueType",
+    "WeeklyCustomerHealthRunner",
+    "WeeklyHealthRun",
+    "WeeklyHealthRunRepository",
     "WorkflowBudgets",
     "WorkflowDefinition",
     "WorkflowDraft",

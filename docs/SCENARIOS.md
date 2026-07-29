@@ -21,10 +21,13 @@ stable idempotency key if the run is retried.
 
 ## Weekly customer health
 
-This task loops over three accounts and is useful before a scheduler exists.
-The expected classifications are based on explicit source data, but the future
-evaluation should grade the evidence and rationale rather than require one
-exact wording.
+This task is implemented as the versioned `wf_weekly_customer_health` workflow.
+It can run manually or through the local scheduler. Each active enterprise
+account receives a customer-isolated loop iteration that gathers canonical CRM,
+deployment, support, incident, and project signals before a structured model
+classification. The result is saved as a cited weekly-report artifact and the
+run stores per-account plus total usage. Expected classifications remain
+evidence-based evaluation targets rather than hard-coded application logic.
 
 ## Evaluation layers
 

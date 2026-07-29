@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "id": "wf_weekly_customer_health",
+  "name": "Weekly customer health",
+  "description": "Review every active enterprise customer using isolated live signals.",
+  "nodes": [
+    {
+      "id": "start",
+      "name": "Manual or weekly schedule",
+      "kind": "trigger",
+      "trigger_type": "manual",
+      "inputs": {},
+      "output_type": "any"
+    },
+    {
+      "id": "customers",
+      "name": "List active customers",
+      "kind": "tool",
+      "tool": "crm__list_customers",
+      "write": false,
+      "arguments": {
+        "status": { "value": "active" }
+      },
+      "inputs": {},
+      "output_type": "list"
+    },
+    {
+      "id": "classify",
+      "name": "Gather live signals and classify customer",
+      "kind": "generate",
+      "prompt": {
+        "reference": {
+          "node_id": "$item",
+          "path": "id",
+          "value_type": "string"
+        }
+      },
+      "response_schema": {
+        "type": "object",
+        "required": ["classification", "rationale", "evidence_ids"]
+      },
+      "inputs": {},
+      "output_type": "object"
+    }
+  ],
+  "edges": [
+    { "source": "start", "target": "customers", "max_iterations": 100 },
+    {
+      "source": "customers",
+      "target": "classify",
+      "loop_over": {
+        "node_id": "customers",
+        "path": "items",
+        "value_type": "list"
+      },
+      "max_iterations": 100
+    }
+  ],
+  "created_at": "2026-07-29T00:00:00Z",
+  "updated_at": "2026-07-29T00:00:00Z"
+}

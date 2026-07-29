@@ -225,7 +225,7 @@ User
 | M3 — Agent runtime and MCP gateway | ✅ Implemented | 6/6 | Direct model/tool loop, policy, approvals, traces |
 | M4 — Discover workspace | ✅ Implemented | 6/6 | Grounded search/chat and evidence UI |
 | M5 — Create artifacts | ✅ Implemented | 5/5 | Persistent editable cited outputs |
-| M6 — Automate workflows | 🟨 Partial | 6/7 | Small model-assisted workflow system |
+| M6 — Automate workflows | ✅ Implemented | 7/7 | Small model-assisted workflow system |
 | M7 — Evaluation and reliability | ⬜ Not started | 0/5 | Deterministic and live-model evidence |
 | M8 — Self-hosted learning experience | ⬜ Not started | 0/4 | One-command stack and teaching path |
 
@@ -1345,7 +1345,7 @@ Export Highland artifacts to Markdown and PDF
 
 # M6 — Automate workflows
 
-**Milestone status:** 🟨 Partial
+**Milestone status:** ✅ Implemented
 **Milestone outcome:** A learner can use Cohere to draft a small workflow,
 review its explicit plan, run it deterministically, and inspect each model and
 tool step.
@@ -1551,8 +1551,8 @@ Add workflow planning testing and run history UI
 
 ## E6.7 — Weekly customer-health workflow acceptance
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E6.6
 
 Scope:
