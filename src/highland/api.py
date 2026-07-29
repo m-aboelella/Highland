@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from .models.provider import build_model_provider
+from .retrieval.citations import CitationResolver
 from .retrieval.sources import MCPSourceReader
 from .retrieval.sync import IndexSynchronizer
 from .settings import HighlandSettings
@@ -46,6 +47,13 @@ def create_app(settings: HighlandSettings | None = None) -> FastAPI:
     @app.post("/index/rebuild")
     async def index_rebuild() -> dict[str, object]:
         return (await synchronizer().rebuild()).model_dump(mode="json")
+
+    @app.get("/index/chunks/{chunk_id}")
+    async def inspect_chunk(chunk_id: str) -> dict[str, object]:
+        chunk = CitationResolver(workspace.indexes / "search").get_chunk(chunk_id)
+        if chunk is None:
+            raise HTTPException(status_code=404, detail="Indexed chunk not found")
+        return chunk.model_dump(mode="json")
 
     return app
 

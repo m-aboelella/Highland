@@ -122,6 +122,7 @@ class SyncManifest(RetrievalModel):
     source_counts: dict[str, int] = Field(default_factory=dict)
     source_cursors: dict[str, str | None] = Field(default_factory=dict)
     failures: dict[str, str] = Field(default_factory=dict)
+    stale_chunk_ids: list[str] = Field(default_factory=list)
 
     @classmethod
     def start(cls) -> Self:

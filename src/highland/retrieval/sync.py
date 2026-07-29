@@ -136,9 +136,7 @@ class IndexSynchronizer:
             indexer.build_from_vectors(chunks, existing_vectors, vector_source)
         completed = datetime.now(UTC)
         tombstones = {
-            key: active_previous[key].model_copy(
-                update={"state": SyncState.TOMBSTONED, "chunk_ids": []}
-            )
+            key: active_previous[key].model_copy(update={"state": SyncState.TOMBSTONED})
             for key in deleted
         }
         tombstones.update(
@@ -149,6 +147,13 @@ class IndexSynchronizer:
             }
         )
         try:
+            current_chunk_ids = {chunk.id for chunk in chunks}
+            newly_stale = {
+                chunk_id
+                for key in changed | deleted
+                for chunk_id in active_previous[key].chunk_ids
+                if chunk_id not in current_chunk_ids
+            }
             promote_snapshot(
                 self.index_dir,
                 chunks=chunks,
@@ -158,6 +163,7 @@ class IndexSynchronizer:
                 counts=counts,
                 tombstones=tombstones,
                 vector_source=vector_source,
+                stale_chunk_ids=sorted(set(previous.stale_chunk_ids) | newly_stale),
             )
         finally:
             if vector_stage is not None and vector_stage.exists():

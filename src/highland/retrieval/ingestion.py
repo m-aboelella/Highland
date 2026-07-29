@@ -229,6 +229,7 @@ def promote_snapshot(
     counts: dict[str, int],
     tombstones: dict[str, SyncRecord] | None = None,
     vector_source: Path | None = None,
+    stale_chunk_ids: list[str] | None = None,
 ) -> None:
     index_dir.parent.mkdir(parents=True, exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix=".index-stage-", dir=index_dir.parent))
@@ -258,6 +259,7 @@ def promote_snapshot(
             completed_at=completed,
             source_counts=counts,
             records=records,
+            stale_chunk_ids=sorted(set(stale_chunk_ids or [])),
         )
         save_manifest(stage / "manifest.json", manifest)
         if vector_source is not None:
