@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any
+from typing import Any, Self
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -65,7 +65,7 @@ class MCPGateway:
         self._tools: dict[str, MCPTool] = {}
         self.failures: dict[str, str] = {}
 
-    async def __aenter__(self) -> MCPGateway:
+    async def __aenter__(self) -> Self:
         await self.start()
         return self
 
@@ -112,7 +112,7 @@ class MCPGateway:
                     description=item.description or "",
                     input_schema=dict(item.inputSchema),
                 )
-        except BaseException as error:
+        except BaseException as error:  # noqa: BLE001 - isolate connector startup failure
             self.failures[connector] = f"{type(error).__name__}: {error}"
             await stack.aclose()
 
@@ -157,7 +157,7 @@ class MCPGateway:
                 is_error=bool(result.isError),
                 error_type="source_error" if result.isError else None,
             )
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - normalize transport/provider failures
             return NormalizedToolResult(
                 connector=tool.connector,
                 tool=qualified_name,

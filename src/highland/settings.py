@@ -47,6 +47,7 @@ class HighlandSettings(BaseSettings):
 
     workspace_dir: Path = REPO_ROOT / "var" / "highland"
     model_price_config: Path = REPO_ROOT / "config" / "model_prices.json"
+    tool_policy_config: Path = REPO_ROOT / "config" / "tool_policy.json"
     mock_catalog_url: str = "http://127.0.0.1:8099"
     connector_commands: ConnectorCommands = Field(
         default_factory=lambda: dict(DEFAULT_CONNECTOR_COMMANDS)
