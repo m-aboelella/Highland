@@ -227,7 +227,7 @@ User
 | M5 — Create artifacts | ✅ Implemented | 5/5 | Persistent editable cited outputs |
 | M6 — Automate workflows | ✅ Implemented | 7/7 | Small model-assisted workflow system |
 | M7 — Evaluation and reliability | ✅ Implemented | 5/5 | Deterministic and live-model evidence |
-| M8 — Self-hosted learning experience | 🟨 Partial | 2/4 | One-command stack and teaching path |
+| M8 — Self-hosted learning experience | 🟨 Partial | 3/4 | One-command stack and teaching path |
 
 ---
 
@@ -1834,8 +1834,8 @@ Document the Highland agent harness learning path
 
 ## E8.3 — Continuous integration and repository quality gates
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E7.1, E4.3
 
 Scope:

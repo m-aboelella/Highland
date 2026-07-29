@@ -65,3 +65,18 @@ showcase evaluation (scenario plus semantic judge) currently estimate to
 approximately `$0.00`, so all three are approximately `$0.00`. This is a dated
 configuration value, not a promise about Cohere pricing; update
 `config/model_prices.json` for the applicable commercial agreement.
+
+## Repository quality gate
+
+Run the same secret-free checks used by pull requests:
+
+```bash
+make ci
+```
+
+This runs Ruff, focused Python static typing for the durable public contracts,
+TypeScript checking, the hermetic Python suite, frontend tests, a production
+frontend build, and a tracked-file scan for secrets or generated runtime state.
+CI explicitly selects scripted mode and never opts into live Cohere tests.
+Failed deterministic reports are uploaded for diagnosis without uploading
+provider keys or private prompts.

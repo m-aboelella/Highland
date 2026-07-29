@@ -1,4 +1,4 @@
-.PHONY: setup generate dev test reset
+.PHONY: setup generate dev test reset lint typecheck web-test web-build repository-check ci
 
 setup:
 	python3 -m venv .venv
@@ -16,3 +16,21 @@ test:
 
 reset:
 	.venv/bin/highland-mocks reset
+
+lint:
+	.venv/bin/ruff check .
+
+typecheck:
+	.venv/bin/mypy
+	cd web && npx tsc --noEmit
+
+web-test:
+	cd web && npm test
+
+web-build:
+	cd web && npm run build
+
+repository-check:
+	.venv/bin/python scripts/check_repository.py
+
+ci: lint typecheck repository-check test web-test web-build
