@@ -227,7 +227,7 @@ User
 | M5 — Create artifacts | ✅ Implemented | 5/5 | Persistent editable cited outputs |
 | M6 — Automate workflows | ✅ Implemented | 7/7 | Small model-assisted workflow system |
 | M7 — Evaluation and reliability | ✅ Implemented | 5/5 | Deterministic and live-model evidence |
-| M8 — Self-hosted learning experience | 🟨 Partial | 1/4 | One-command stack and teaching path |
+| M8 — Self-hosted learning experience | 🟨 Partial | 2/4 | One-command stack and teaching path |
 
 ---
 
@@ -1801,8 +1801,8 @@ Package the complete Highland learning stack with Compose
 
 ## E8.2 — Guided learning path and architecture walkthrough
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E8.1
 
 Scope:
