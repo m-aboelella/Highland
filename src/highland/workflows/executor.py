@@ -20,6 +20,7 @@ from highland.models.contracts import (
     Usage,
 )
 from highland.retrieval.hybrid import RetrievalFilters
+from highland.runtime.approvals import ApprovalService, ApprovalStatus, ApprovalStore
 from highland.runtime.policy import RunScope, ToolRegistry
 
 from .schema import (
@@ -130,12 +131,14 @@ class WorkflowExecutor:
         repository: WorkflowRunRepository,
         retriever: Retriever | None = None,
         budgets: WorkflowBudgets | None = None,
+        approvals: ApprovalStore | None = None,
     ) -> None:
         self.model = model
         self.tools = tools
         self.repository = repository
         self.retriever = retriever
         self.budgets = budgets or WorkflowBudgets()
+        self.approvals = approvals
 
     async def run(
         self,
@@ -186,11 +189,53 @@ class WorkflowExecutor:
                     self._save(run)
                     continue
                 if isinstance(node, ApprovalNode) and node.id not in approved_nodes:
-                    record.status = NodeRunStatus.WAITING_APPROVAL
-                    record.inputs = {"tool_node_id": node.tool_node_id, "reason": node.reason}
-                    run.status = WorkflowRunStatus.PAUSED
-                    self._save(run)
-                    return run
+                    if self.approvals is None:
+                        record.status = NodeRunStatus.WAITING_APPROVAL
+                        record.inputs = {"tool_node_id": node.tool_node_id, "reason": node.reason}
+                        run.status = WorkflowRunStatus.PAUSED
+                        self._save(run)
+                        return run
+                    approval_id = (
+                        record.output.get("approval_id")
+                        if isinstance(record.output, dict)
+                        else None
+                    )
+                    if approval_id is None:
+                        tool_node = next(
+                            item
+                            for item in definition.nodes
+                            if isinstance(item, ToolNode) and item.id == node.tool_node_id
+                        )
+                        arguments = _node_inputs(tool_node, run)
+                        checked = self.tools.validate(
+                            tool_node.tool,
+                            arguments,
+                            run_id=run.id,
+                            logical_step_id=tool_node.id,
+                            scope=scope,
+                        )
+                        approval = self.approvals.create(
+                            run_id=run.id,
+                            tool_call_id=tool_node.id,
+                            call=checked,
+                            reason=node.reason,
+                        )
+                        approval_id = approval.id
+                        record.output = {
+                            "approval_id": approval.id,
+                            "tool_node_id": node.tool_node_id,
+                        }
+                    approval = self.approvals.get(approval_id)
+                    if approval.status in (ApprovalStatus.PENDING, ApprovalStatus.EXPIRED):
+                        record.status = NodeRunStatus.WAITING_APPROVAL
+                        record.inputs = {"tool_node_id": node.tool_node_id, "reason": node.reason}
+                        run.status = WorkflowRunStatus.PAUSED
+                        self._save(run)
+                        return run
+                    if approval.status is ApprovalStatus.REJECTED:
+                        raise RuntimeError(
+                            f"workflow approval rejected: {approval.decision_reason or 'no reason'}"
+                        )
                 record.status = NodeRunStatus.RUNNING
                 record.attempts += 1
                 record.started_at = datetime.now(UTC)
@@ -260,7 +305,13 @@ class WorkflowExecutor:
         if isinstance(node, TriggerNode):
             return run.trigger, Usage()
         if isinstance(node, ApprovalNode):
-            return {"approved": True}, Usage()
+            existing = run.nodes[node.id].output
+            return (
+                {**existing, "approved": True}
+                if isinstance(existing, dict)
+                else {"approved": True},
+                Usage(),
+            )
         if isinstance(node, RetrieveNode):
             if self.retriever is None:
                 raise RuntimeError("workflow retrieval is not configured")
@@ -306,11 +357,26 @@ class WorkflowExecutor:
                 logical_step_id=node.id,
                 scope=scope,
             )
-            result = (
-                await self.tools.execute_approved(checked)
-                if node.write
-                else await self.tools.execute(checked)
-            )
+            if node.write and self.approvals:
+                approval_id = next(
+                    (
+                        item.output["approval_id"]
+                        for item in run.nodes.values()
+                        if isinstance(item.output, dict)
+                        and item.output.get("tool_node_id") == node.id
+                        and "approval_id" in item.output
+                    ),
+                    None,
+                )
+                if approval_id is None:
+                    raise RuntimeError(f"write node {node.id} has no durable approval")
+                result = await ApprovalService(self.approvals, self.tools).resume(approval_id)
+            else:
+                result = (
+                    await self.tools.execute_approved(checked)
+                    if node.write
+                    else await self.tools.execute(checked)
+                )
             run.tool_calls += 1
             if result.is_error:
                 raise RuntimeError(result.content)

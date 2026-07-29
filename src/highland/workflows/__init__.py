@@ -9,6 +9,7 @@ from .executor import (
 )
 from .planner import PlannerRecord, WorkflowDraft, WorkflowPlanner, WorkflowPlanningError
 from .repository import WorkflowRepository
+from .schedules import LocalWorkflowScheduler, WorkflowSchedule, WorkflowScheduleRepository
 from .schema import (
     ApprovalNode,
     GenerateNode,
@@ -26,6 +27,7 @@ from .schema import (
 __all__ = [
     "ApprovalNode",
     "GenerateNode",
+    "LocalWorkflowScheduler",
     "NodeInput",
     "NodeRun",
     "NodeRunStatus",
@@ -46,5 +48,7 @@ __all__ = [
     "WorkflowRun",
     "WorkflowRunRepository",
     "WorkflowRunStatus",
+    "WorkflowSchedule",
+    "WorkflowScheduleRepository",
     "WorkflowVersion",
 ]
