@@ -224,7 +224,7 @@ User
 | M2 — Ingestion and hybrid retrieval | ✅ Implemented | 6/6 | Backfill, incremental sync, FAISS, reranking |
 | M3 — Agent runtime and MCP gateway | ✅ Implemented | 6/6 | Direct model/tool loop, policy, approvals, traces |
 | M4 — Discover workspace | ✅ Implemented | 6/6 | Grounded search/chat and evidence UI |
-| M5 — Create artifacts | ⬜ Not started | 0/5 | Persistent editable cited outputs |
+| M5 — Create artifacts | 🟨 Partial | 1/5 | Persistent editable cited outputs |
 | M6 — Automate workflows | ⬜ Not started | 0/7 | Small model-assisted workflow system |
 | M7 — Evaluation and reliability | ⬜ Not started | 0/5 | Deterministic and live-model evidence |
 | M8 — Self-hosted learning experience | ⬜ Not started | 0/4 | One-command stack and teaching path |
@@ -1174,14 +1174,14 @@ Validate the grounded customer meeting preparation flow
 
 # M5 — Create artifacts
 
-**Milestone status:** ⬜ Not started
+**Milestone status:** 🟨 Partial
 **Milestone outcome:** A chat result can become a persistent, editable,
 evidence-backed document without regenerating the whole artifact.
 
 ## E5.1 — Artifact domain, file repository, and APIs
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E1.1, E4.1
 
 Scope:

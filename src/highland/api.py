@@ -7,6 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from .artifacts import (
+    ArtifactCitation,
+    ArtifactRepository,
+    ArtifactType,
+    StaleArtifactRevision,
+)
 from .discover.conversations import ConversationStore
 from .discover.service import ChatRequest, DiscoverFilters, DiscoverService, SearchRequest
 from .models.provider import ModelProvider, build_model_provider
@@ -45,6 +51,24 @@ class CancelRunRequest(ApiModel):
     reason: str | None = Field(default=None, max_length=500)
 
 
+class CreateArtifactRequest(ApiModel):
+    title: str = Field(min_length=1, max_length=300)
+    artifact_type: ArtifactType
+    content: str = Field(max_length=1_000_000)
+    conversation_id: str
+    run_id: str
+    message_id: str | None = None
+    citations: list[ArtifactCitation] = Field(default_factory=list)
+
+
+class UpdateArtifactRequest(ApiModel):
+    expected_revision: int = Field(ge=1)
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    content: str | None = Field(default=None, max_length=1_000_000)
+    citations: list[ArtifactCitation] | None = None
+    reason: str = Field(default="manual edit", max_length=300)
+
+
 def create_app(
     settings: HighlandSettings | None = None,
     *,
@@ -64,6 +88,7 @@ def create_app(
     run_events = RunEventStore(workspace.runs / "events")
     cancellations = RunCancellationStore(workspace.runs / "cancellations")
     conversations = ConversationStore(workspace.conversations)
+    artifacts = ArtifactRepository(workspace.artifacts)
     provider = model_provider or build_model_provider(configured)
     discover = DiscoverService(
         index_dir=workspace.indexes / "search",
@@ -101,6 +126,71 @@ def create_app(
     async def list_agents() -> list[dict[str, object]]:
         profile = AgentProfile.load(configured.agent_profile_config)
         return [profile.model_dump(mode="json")]
+
+    @app.post("/artifacts", status_code=status.HTTP_201_CREATED)
+    async def create_artifact(request: CreateArtifactRequest) -> dict[str, object]:
+        try:
+            conversation = conversations.get(request.conversation_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Originating conversation not found") from None
+        if not any(message.run_id == request.run_id for message in conversation.messages):
+            raise HTTPException(
+                status_code=422,
+                detail="Originating run does not belong to the conversation",
+            )
+        artifact = artifacts.create(**request.model_dump())
+        return artifact.model_dump(mode="json")
+
+    @app.get("/artifacts")
+    async def list_artifacts() -> list[dict[str, object]]:
+        return [artifact.model_dump(mode="json") for artifact in artifacts.list()]
+
+    @app.get("/artifacts/{artifact_id}")
+    async def get_artifact(artifact_id: str) -> dict[str, object]:
+        try:
+            return artifacts.get(artifact_id).model_dump(mode="json")
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Artifact not found") from None
+
+    @app.patch("/artifacts/{artifact_id}")
+    async def update_artifact(
+        artifact_id: str, request: UpdateArtifactRequest
+    ) -> dict[str, object]:
+        try:
+            artifact = artifacts.update(
+                artifact_id,
+                **request.model_dump(exclude_none=True),
+            )
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Artifact not found") from None
+        except StaleArtifactRevision as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return artifact.model_dump(mode="json")
+
+    @app.delete("/artifacts/{artifact_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def delete_artifact(artifact_id: str) -> Response:
+        try:
+            artifacts.delete(artifact_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Artifact not found") from None
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @app.get("/artifacts/{artifact_id}/revisions")
+    async def list_artifact_revisions(artifact_id: str) -> list[dict[str, object]]:
+        try:
+            return [
+                revision.model_dump(mode="json")
+                for revision in artifacts.revisions(artifact_id)
+            ]
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Artifact not found") from None
+
+    @app.get("/artifacts/{artifact_id}/revisions/{revision}")
+    async def get_artifact_revision(artifact_id: str, revision: int) -> dict[str, object]:
+        try:
+            return artifacts.revision(artifact_id, revision).model_dump(mode="json")
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Artifact revision not found") from None
 
     def synchronizer() -> IndexSynchronizer:
         return IndexSynchronizer(
