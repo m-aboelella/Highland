@@ -35,8 +35,10 @@ async def test_discovers_and_qualifies_all_connector_tools() -> None:
 
 @pytest.mark.asyncio
 async def test_unavailable_connector_does_not_hide_healthy_tools() -> None:
-    configured = commands()
-    configured["broken"] = ("/definitely/missing/highland-mcp",)
+    configured = {
+        "broken": (sys.executable, "-c", "raise SystemExit(1)"),
+        "crm": commands()["crm"],
+    }
     async with MCPGateway(configured, startup_timeout_seconds=3) as gateway:
         assert "broken" in gateway.failures
         assert "crm__list_customers" in {tool.qualified_name for tool in gateway.tools}
@@ -48,3 +50,14 @@ async def test_unknown_tool_returns_bounded_source_aware_error() -> None:
         result = await gateway.call("crm__does_not_exist", {})
         assert result.is_error
         assert result.error_type == "unknown_tool"
+
+
+@pytest.mark.asyncio
+async def test_gateway_can_start_and_close_repeatedly() -> None:
+    gateway = MCPGateway({"crm": commands()["crm"]})
+
+    for _ in range(2):
+        await gateway.start()
+        assert "crm__list_customers" in {tool.qualified_name for tool in gateway.tools}
+        await gateway.close()
+        assert gateway.tools == []

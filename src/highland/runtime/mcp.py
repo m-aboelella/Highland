@@ -78,9 +78,11 @@ class MCPGateway:
         return f"{connector}__{tool}"
 
     async def start(self) -> list[MCPTool]:
-        await asyncio.gather(
-            *(self._connect(name, command) for name, command in self.connector_commands.items())
-        )
+        # AnyIO's stdio transport binds its cancel scope to the task that enters
+        # it. Connect sequentially so the gateway owner also closes every
+        # connector from that same task.
+        for name, command in self.connector_commands.items():
+            await self._connect(name, command)
         return self.tools
 
     async def _connect(self, connector: str, command: tuple[str, ...]) -> None:

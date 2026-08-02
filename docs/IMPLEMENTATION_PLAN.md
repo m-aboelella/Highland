@@ -231,7 +231,7 @@ User
 | M9 — Simpler code structure | ✅ Implemented | 2/2 | Clear composition, configuration, and mock ownership |
 | M10 — Faithful evaluation | ✅ Implemented | 2/2 | Production-path retrieval and agent evaluation |
 | M11 — Reproducible learning environment | ✅ Implemented | 2/2 | Locked setup, smoke tests, and experiment guidance |
-| M12 — Cross-environment CI stability | 🟨 Partial | 1/2 | Portable export assertions and task-safe MCP lifecycle |
+| M12 — Cross-environment CI stability | ✅ Implemented | 2/2 | Portable export assertions and task-safe MCP lifecycle |
 
 ---
 
@@ -2210,7 +2210,7 @@ Delivered:
 
 # M12 — Cross-environment CI stability
 
-**Milestone status:** 🟨 Partial
+**Milestone status:** ✅ Implemented
 **Milestone outcome:** The same locked suite passes locally and on GitHub's
 Linux runner without asserting unsupported renderer behavior or violating MCP
 transport task ownership.
@@ -2245,8 +2245,8 @@ Test portable PDF export behavior
 
 ## E12.2 — Make MCP connector lifecycle task-safe
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** `Make MCP connector lifecycle task-safe`
 **Depends on:** E12.1
 
 Scope:
@@ -2270,6 +2270,15 @@ Suggested commit:
 ```text
 Make MCP connector lifecycle task-safe
 ```
+
+Delivered:
+
+- MCP connector startup is deliberately sequential so each AnyIO-backed stdio
+  context is entered and exited by the gateway owner task.
+- A connector that starts but fails its MCP handshake remains isolated from
+  later healthy connectors.
+- The same gateway can be started and closed repeatedly without retaining stale
+  tools or transport state.
 
 ---
 
