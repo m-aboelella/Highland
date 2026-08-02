@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from highland.cli import _retrieval_baseline_path
 from highland.discover.service import SearchRequest
 from highland.evaluation.retrieval import evaluate_retrieval, load_relevance_set
 from highland.models.scripted import DeterministicEmbeddingModel, DeterministicRerankModel
@@ -13,6 +14,7 @@ from highland.retrieval.contracts import SourceDocument, chunk_document
 from highland.retrieval.faiss_store import EmbeddingIndex, FaissStore
 from highland.retrieval.hybrid import HybridRetriever
 from highland.retrieval.ingestion import promote_snapshot
+from highland.settings import HighlandSettings
 
 
 class ProductionSearcher:
@@ -25,6 +27,24 @@ class ProductionSearcher:
 
 def _write_relevance(path: Path, cases: list[dict[str, object]]) -> None:
     path.write_text(json.dumps({"version": 1, "reviewed": True, "cases": cases}))
+
+
+def test_retrieval_artifact_defaults_resolve_to_checked_in_files() -> None:
+    settings = HighlandSettings()
+
+    assert settings.retrieval_relevance_config.name == "retrieval-relevance.json"
+    assert settings.retrieval_baseline_config.name == "retrieval-baseline.json"
+    assert settings.retrieval_relevance_config.is_file()
+    assert settings.retrieval_baseline_config.is_file()
+
+
+def test_retrieval_baseline_selection_preserves_cli_semantics(tmp_path: Path) -> None:
+    configured = tmp_path / "configured.json"
+    requested = tmp_path / "requested.json"
+
+    assert _retrieval_baseline_path(configured, None, enforce=False) is None
+    assert _retrieval_baseline_path(configured, None, enforce=True) == configured
+    assert _retrieval_baseline_path(configured, requested, enforce=False) == requested
 
 
 async def _searcher(index_dir: Path) -> ProductionSearcher:

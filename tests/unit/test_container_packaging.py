@@ -75,6 +75,12 @@ def test_production_image_declares_packaged_application_configuration() -> None:
         "HIGHLAND_MODEL_PRICE_CONFIG": "config/model_prices.json",
         "HIGHLAND_TOOL_POLICY_CONFIG": "config/tool_policy.json",
         "HIGHLAND_AGENT_PROFILE_CONFIG": "config/agents/general.json",
+        "HIGHLAND_RETRIEVAL_RELEVANCE_CONFIG": (
+            "config/evaluation/retrieval-relevance.json"
+        ),
+        "HIGHLAND_RETRIEVAL_BASELINE_CONFIG": (
+            "config/evaluation/retrieval-baseline.json"
+        ),
     }
 
     assert "COPY config ./config" in dockerfile

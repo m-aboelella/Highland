@@ -115,6 +115,17 @@ def _print_doctor(report: dict[str, object]) -> None:
         print(f"Connector {name}: {state} ({' '.join(details['command'])})")
 
 
+def _retrieval_baseline_path(
+    configured: Path,
+    requested: Path | None,
+    *,
+    enforce: bool,
+) -> Path | None:
+    if requested is not None:
+        return requested
+    return configured if enforce else None
+
+
 def main() -> None:
     args = build_parser().parse_args()
     settings = HighlandSettings()
@@ -215,20 +226,15 @@ def main() -> None:
                 "and COHERE_API_KEY"
             )
         services = ApplicationServices.build(settings)
-        default_baseline = (
-            Path(__file__).resolve().parents[2]
-            / "config"
-            / "evaluation"
-            / "retrieval-baseline.json"
+        baseline = _retrieval_baseline_path(
+            settings.retrieval_baseline_config,
+            args.baseline,
+            enforce=args.enforce_baseline,
         )
-        baseline = args.baseline or (default_baseline if args.enforce_baseline else None)
         report = asyncio.run(
             evaluate_retrieval(
                 services.discover,
-                relevance_path=Path(__file__).resolve().parents[2]
-                / "config"
-                / "evaluation"
-                / "retrieval-relevance.json",
+                relevance_path=settings.retrieval_relevance_config,
                 index_dir=services.workspace.indexes / "search",
                 reports_dir=settings.workspace_dir / "reports" / "retrieval",
                 backend=settings.model_backend.value,

@@ -235,6 +235,7 @@ User
 | M13 — Compose failure evidence | ✅ Implemented | 1/1 | Preserve actionable bootstrap diagnostics in CI |
 | M14 — Container ingestion startup | ✅ Implemented | 1/1 | Propagate connector service URLs into ingestion MCP processes |
 | M15 — Container application configuration | ✅ Implemented | 1/1 | Resolve packaged runtime configuration from explicit image paths |
+| M16 — Container evaluation configuration | ✅ Implemented | 1/1 | Resolve retrieval evaluation artifacts through portable settings |
 
 ---
 
@@ -2417,6 +2418,51 @@ Delivered:
 
 ---
 
+# M16 — Container evaluation configuration
+
+**Milestone status:** ✅ Implemented
+**Milestone outcome:** The retrieval evaluator uses configurable relevance and
+baseline artifacts in native and installed/container runtimes.
+
+## E16.1 — Configure retrieval evaluation artifacts
+
+**Status:** ✅ Implemented
+**Depends on:** M15
+**Implemented in:** `Configure portable retrieval evaluation artifacts`
+
+Scope:
+
+- Add settings for the reviewed retrieval relevance set and committed baseline,
+  retaining repository-relative native defaults.
+- Route the retrieval CLI through those settings instead of deriving paths from
+  the installed module location.
+- Declare the copied `/app/config/evaluation` paths in the production image and
+  cover both native and packaged behavior with focused tests.
+
+Verification:
+
+```bash
+pytest tests/unit/test_container_packaging.py tests/unit/evaluation/test_retrieval.py
+make ci
+```
+
+Suggested commit:
+
+```text
+Configure portable retrieval evaluation artifacts
+```
+
+Delivered:
+
+- Native runs resolve retrieval relevance and baseline artifacts from explicit,
+  repository-relative settings defaults.
+- The retrieval CLI preserves explicit `--baseline` and no-baseline behavior
+  while using the configured baseline for `--enforce-baseline`.
+- The production image points both settings at the evaluation files copied
+  beneath `/app/config`, with focused native and packaging coverage.
+
+---
+
 # Working agreement for future Codex sessions
 
 ## Session startup
@@ -2485,7 +2531,7 @@ E1.* + E2.1 -> E2.4 -> E2.5 -> E2.6
 E3.2 + model providers -> E3.3 -> E3.4 -> E3.5 -> E3.6
 M2 + M3 -> M4 -> M5
 M2 + M3 + M5 -> M6
-M3 through M6 -> M7 -> M8 -> M9 -> M10 -> M11 -> M12 -> M13 -> M14 -> M15
+M3 through M6 -> M7 -> M8 -> M9 -> M10 -> M11 -> M12 -> M13 -> M14 -> M15 -> M16
 ```
 
 E3.1 is intentionally required by E2.2 because index population should teach
@@ -2496,7 +2542,7 @@ behind the connector layer.
 
 Highland is complete when:
 
-- all epics through M15 are implemented or explicitly moved out of scope with a
+- all epics through M16 are implemented or explicitly moved out of scope with a
   documented reason;
 - the default suite is deterministic, offline, and non-billable;
 - the three live Cohere scenarios can be run separately with explicit opt-in;

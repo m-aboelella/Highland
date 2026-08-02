@@ -52,6 +52,12 @@ class HighlandSettings(BaseSettings):
     model_price_config: Path = REPO_ROOT / "config" / "model_prices.json"
     tool_policy_config: Path = REPO_ROOT / "config" / "tool_policy.json"
     agent_profile_config: Path = REPO_ROOT / "config" / "agents" / "general.json"
+    retrieval_relevance_config: Path = (
+        REPO_ROOT / "config" / "evaluation" / "retrieval-relevance.json"
+    )
+    retrieval_baseline_config: Path = (
+        REPO_ROOT / "config" / "evaluation" / "retrieval-baseline.json"
+    )
     mock_catalog_url: str = "http://127.0.0.1:8099"
     connector_commands: ConnectorCommands = Field(
         default_factory=lambda: dict(DEFAULT_CONNECTOR_COMMANDS)
