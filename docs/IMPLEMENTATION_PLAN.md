@@ -231,6 +231,7 @@ User
 | M9 — Simpler code structure | ✅ Implemented | 2/2 | Clear composition, configuration, and mock ownership |
 | M10 — Faithful evaluation | ✅ Implemented | 2/2 | Production-path retrieval and agent evaluation |
 | M11 — Reproducible learning environment | ✅ Implemented | 2/2 | Locked setup, smoke tests, and experiment guidance |
+| M12 — Cross-environment CI stability | 🟨 Partial | 1/2 | Portable export assertions and task-safe MCP lifecycle |
 
 ---
 
@@ -2207,6 +2208,71 @@ Delivered:
 
 ---
 
+# M12 — Cross-environment CI stability
+
+**Milestone status:** 🟨 Partial
+**Milestone outcome:** The same locked suite passes locally and on GitHub's
+Linux runner without asserting unsupported renderer behavior or violating MCP
+transport task ownership.
+
+## E12.1 — Test portable PDF export behavior
+
+**Status:** ✅ Implemented
+**Implemented in:** `Test portable PDF export behavior`
+**Depends on:** M11
+
+Scope:
+
+- Preserve offline resource blocking, sanitization, Markdown structure, and
+  valid PDF download behavior.
+- Replace byte-for-byte PDF equality with assertions over the stable product
+  contract because WeasyPrint does not guarantee identical compressed font
+  subsets across repeated renders or platforms.
+- Document no new PDF determinism guarantee and keep production export code
+  unchanged unless a genuine contract defect is found.
+
+Verification:
+
+```bash
+pytest tests/integration/test_artifact_export.py
+```
+
+Suggested commit:
+
+```text
+Test portable PDF export behavior
+```
+
+## E12.2 — Make MCP connector lifecycle task-safe
+
+**Status:** ⬜ Not started
+**Implemented in:** —
+**Depends on:** E12.1
+
+Scope:
+
+- Ensure each stdio MCP async context is entered and exited from a compatible
+  task while preserving connector failure isolation and healthy tools.
+- Prefer the simplest lifecycle correction over a new supervision framework.
+- Retain qualified tool names, timeouts, normalized errors, and partial startup
+  behavior.
+
+Verification:
+
+```bash
+pytest tests/integration/test_mcp_gateway.py
+pytest tests/reliability
+make ci
+```
+
+Suggested commit:
+
+```text
+Make MCP connector lifecycle task-safe
+```
+
+---
+
 # Working agreement for future Codex sessions
 
 ## Session startup
@@ -2275,7 +2341,7 @@ E1.* + E2.1 -> E2.4 -> E2.5 -> E2.6
 E3.2 + model providers -> E3.3 -> E3.4 -> E3.5 -> E3.6
 M2 + M3 -> M4 -> M5
 M2 + M3 + M5 -> M6
-M3 through M6 -> M7 -> M8 -> M9 -> M10 -> M11
+M3 through M6 -> M7 -> M8 -> M9 -> M10 -> M11 -> M12
 ```
 
 E3.1 is intentionally required by E2.2 because index population should teach
@@ -2286,7 +2352,7 @@ behind the connector layer.
 
 Highland is complete when:
 
-- all epics through M11 are implemented or explicitly moved out of scope with a
+- all epics through M12 are implemented or explicitly moved out of scope with a
   documented reason;
 - the default suite is deterministic, offline, and non-billable;
 - the three live Cohere scenarios can be run separately with explicit opt-in;

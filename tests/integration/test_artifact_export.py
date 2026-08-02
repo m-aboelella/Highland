@@ -14,6 +14,7 @@ from highland.artifacts import (
     export_pdf,
     safe_export_filename,
 )
+from highland.artifacts import export as export_module
 from highland.settings import HighlandSettings
 
 
@@ -52,13 +53,33 @@ def test_canonical_markdown_contains_resolvable_source_appendix(tmp_path: Path) 
     assert safe_export_filename(artifact.title, extension="md") == "northwind-q4-script.md"
 
 
-def test_pdf_export_is_local_sanitized_and_preserves_document_structure(tmp_path: Path) -> None:
+def test_pdf_export_is_local_sanitized_and_preserves_document_structure(
+    tmp_path: Path, monkeypatch
+) -> None:
     artifact = stored_artifact(tmp_path)
+    documents: list[str] = []
+    real_html = export_module.HTML
+
+    def recording_html(**kwargs):
+        documents.append(kwargs["string"])
+        assert kwargs["url_fetcher"] is export_module._deny_resource_fetch
+        return real_html(**kwargs)
+
+    monkeypatch.setattr(export_module, "HTML", recording_html)
     first = export_pdf(artifact)
     second = export_pdf(artifact)
-    assert first.startswith(b"%PDF")
-    assert len(first) > 1_000
-    assert first == second
+    for rendered_pdf in (first, second):
+        assert rendered_pdf.startswith(b"%PDF")
+        assert rendered_pdf.rstrip().endswith(b"%%EOF")
+        assert len(rendered_pdf) > 1_000
+
+    assert len(documents) == 2
+    assert all("<h1>Northwind briefing</h1>" in document for document in documents)
+    assert all("<table>" in document for document in documents)
+    assert all("<h2>Sources</h2>" in document for document in documents)
+    assert all("<script" not in document for document in documents)
+    assert all("<img" not in document for document in documents)
+    assert all("tracker.invalid" not in document for document in documents)
 
 
 def test_export_api_returns_offline_downloads(tmp_path: Path) -> None:
