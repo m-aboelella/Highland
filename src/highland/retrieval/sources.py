@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Mapping
 from contextlib import AsyncExitStack
 from datetime import timedelta
@@ -53,7 +54,11 @@ class MCPSourceReader:
         command = self.connector_commands.get(connector)
         if not command:
             raise SourceReadError(source, f"connector {connector!r} is not configured")
-        parameters = StdioServerParameters(command=command[0], args=list(command[1:]))
+        parameters = StdioServerParameters(
+            command=command[0],
+            args=list(command[1:]),
+            env=dict(os.environ),
+        )
         try:
             async with AsyncExitStack() as stack:
                 read, write = await stack.enter_async_context(stdio_client(parameters))
