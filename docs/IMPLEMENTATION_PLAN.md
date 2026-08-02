@@ -228,7 +228,7 @@ User
 | M6 — Automate workflows | ✅ Implemented | 7/7 | Small model-assisted workflow system |
 | M7 — Evaluation and reliability | ✅ Implemented | 5/5 | Deterministic and live-model evidence |
 | M8 — Self-hosted learning experience | ✅ Implemented | 5/5 | One-key stack and teaching path |
-| M9 — Simpler code structure | 🟡 In progress | 1/2 | Clear composition, configuration, and mock ownership |
+| M9 — Simpler code structure | ✅ Implemented | 2/2 | Clear composition, configuration, and mock ownership |
 | M10 — Faithful evaluation | ⬜ Not started | 0/2 | Production-path retrieval and agent evaluation |
 | M11 — Reproducible learning environment | ⬜ Not started | 0/2 | Locked setup, smoke tests, and experiment guidance |
 
@@ -1931,7 +1931,7 @@ docker compose config --quiet
 
 # M9 — Simpler code structure
 
-**Milestone status:** 🟡 In progress
+**Milestone status:** ✅ Implemented
 **Milestone outcome:** Highland retains all capabilities while gaining clearer
 composition, configuration, and mock-system ownership.
 
@@ -1981,8 +1981,8 @@ Simplify Highland application composition
 
 ## E9.2 — Organize mock systems by source
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E9.1
 
 Scope:
@@ -1993,6 +1993,17 @@ Scope:
 - Preserve ports, generated seed content, REST schemas, MCP tool names, and
   idempotency behavior.
 - Do not introduce a plugin framework or dynamic discovery layer.
+
+Delivered:
+
+- Added one explicit vertical module per fictional source system; each module
+  now owns its compact seed builder, REST routes, and FastMCP tool registration.
+- Reduced the seed generator and API/MCP entrypoints to shared lifecycle code
+  plus a small, static source registry.
+- Centralized only cross-source schemas, HTTP helpers, storage access, failure
+  injection, provenance helpers, and deterministic metric generation.
+- Preserved generated seed and knowledge files byte-for-byte, along with ports,
+  REST and MCP names, write idempotency, and reset behavior.
 
 Verification:
 

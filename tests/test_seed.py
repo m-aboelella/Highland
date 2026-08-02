@@ -5,6 +5,7 @@ from pathlib import Path
 
 from highland_mocks.constants import SERVICES
 from highland_mocks.seed import DATASET_VERSION, generate_seed
+from highland_mocks.systems import SYSTEMS
 
 
 def _load(path: Path) -> dict:
@@ -18,6 +19,14 @@ def test_generator_is_deterministic(tmp_path: Path) -> None:
     generate_seed(second)
     for service in SERVICES:
         assert (first / f"{service}.json").read_bytes() == (second / f"{service}.json").read_bytes()
+
+
+def test_each_source_owns_seed_rest_and_mcp_registration() -> None:
+    assert tuple(SYSTEMS) == SERVICES
+    for system in SYSTEMS.values():
+        assert callable(system.seed_fragment)
+        assert callable(system.register_routes)
+        assert callable(system.register_tools)
 
 
 def test_cross_system_customer_and_deployment_links(tmp_path: Path) -> None:
