@@ -143,7 +143,7 @@ async def test_customer_meeting_preparation_is_grounded_and_read_only(tmp_path: 
         chunks,
         vector_store=vectors,
         embedding_index=indexer,
-        rerankers={"fast": DeterministicRerankModel()},
+        reranker=DeterministicRerankModel(),
         candidate_limit=len(chunks),
         result_limit=len(chunks),
     ).search(

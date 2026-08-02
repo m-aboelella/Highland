@@ -1,0 +1,128 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from .artifacts import ArtifactGenerator, ArtifactRepository, EvidenceCoverageChecker
+from .discover.conversations import ConversationStore
+from .discover.service import DiscoverService
+from .models.provider import ModelProvider, build_model_provider
+from .retrieval.sources import MCPSourceReader
+from .retrieval.sync import IndexSynchronizer
+from .runtime.agent import AgentProfile
+from .runtime.approvals import ApprovalStore
+from .runtime.cancellation import RunCancellationStore
+from .runtime.events import RunEventStore
+from .settings import HighlandSettings
+from .workflows import WorkflowRepository, WorkflowRunRepository
+from .workflows.schedules import WorkflowScheduleRepository
+from .workspace import WorkspacePaths
+
+
+def _model_ids(provider: ModelProvider) -> dict[str, str]:
+    return {
+        "chat": str(getattr(provider.chat, "model", provider.chat.name)),
+        "embedding": str(getattr(provider.embeddings, "model", provider.embeddings.name)),
+        "rerank": str(getattr(provider.rerank, "model", provider.rerank.name)),
+    }
+
+
+def _limits(settings: HighlandSettings, profile: AgentProfile) -> dict[str, dict[str, int | float]]:
+    return {
+        "agent": {
+            "max_steps": profile.budgets.max_steps,
+            "max_model_calls": profile.budgets.max_model_calls,
+            "max_wall_seconds": profile.budgets.max_wall_seconds,
+        },
+        "provider": {
+            "max_model_calls": settings.max_model_calls_per_run,
+            "max_rerank_searches": settings.max_rerank_searches_per_run,
+            "max_tokens": settings.max_tokens_per_run,
+            "max_cost_usd": settings.max_run_cost_usd,
+        },
+    }
+
+
+@dataclass(frozen=True, slots=True)
+class ApplicationServices:
+    """The application composition root shared by HTTP and evaluation entrypoints."""
+
+    settings: HighlandSettings
+    workspace: WorkspacePaths
+    provider: ModelProvider
+    profile: AgentProfile
+    approvals: ApprovalStore
+    run_events: RunEventStore
+    cancellations: RunCancellationStore
+    conversations: ConversationStore
+    artifacts: ArtifactRepository
+    artifact_generator: ArtifactGenerator
+    coverage_checker: EvidenceCoverageChecker
+    workflows: WorkflowRepository
+    workflow_runs: WorkflowRunRepository
+    workflow_schedules: WorkflowScheduleRepository
+    discover: DiscoverService
+
+    @classmethod
+    def build(
+        cls,
+        settings: HighlandSettings,
+        *,
+        model_provider: ModelProvider | None = None,
+    ) -> ApplicationServices:
+        workspace = WorkspacePaths.from_root(settings.workspace_dir)
+        workspace.ensure()
+        provider = model_provider or build_model_provider(settings)
+        profile = AgentProfile.load(settings.agent_profile_config)
+        approvals = ApprovalStore(workspace.runs / "approvals")
+        run_events = RunEventStore(workspace.runs / "events")
+        cancellations = RunCancellationStore(workspace.runs / "cancellations")
+        conversations = ConversationStore(workspace.conversations)
+        artifacts = ArtifactRepository(workspace.artifacts)
+        workflows = WorkflowRepository(workspace.workflows)
+        return cls(
+            settings=settings,
+            workspace=workspace,
+            provider=provider,
+            profile=profile,
+            approvals=approvals,
+            run_events=run_events,
+            cancellations=cancellations,
+            conversations=conversations,
+            artifacts=artifacts,
+            artifact_generator=ArtifactGenerator(provider.chat, artifacts),
+            coverage_checker=EvidenceCoverageChecker(provider.chat),
+            workflows=workflows,
+            workflow_runs=WorkflowRunRepository(workspace.runs / "workflows"),
+            workflow_schedules=WorkflowScheduleRepository(workspace.workflows / "schedules"),
+            discover=DiscoverService(
+                index_dir=workspace.indexes / "search",
+                conversations=conversations,
+                runs_dir=workspace.runs,
+                provider=provider,
+                profile=profile,
+                tool_policy=settings.tool_policy_config,
+                connector_commands=settings.connector_commands,
+                connector_timeout_seconds=settings.connector_timeout_seconds,
+                trace_context={
+                    "models": _model_ids(provider),
+                    "limits": _limits(settings, profile),
+                },
+            ),
+        )
+
+    def synchronizer(self) -> IndexSynchronizer:
+        return IndexSynchronizer(
+            MCPSourceReader(
+                self.settings.connector_commands,
+                timeout_seconds=self.settings.connector_timeout_seconds,
+            ),
+            index_dir=self.workspace.indexes / "search",
+            reports_dir=self.workspace.synchronization,
+            embedding_model=self.provider.embeddings,
+        )
+
+    def effective_models(self) -> dict[str, str]:
+        return _model_ids(self.provider)
+
+    def effective_limits(self) -> dict[str, dict[str, int | float]]:
+        return _limits(self.settings, self.profile)

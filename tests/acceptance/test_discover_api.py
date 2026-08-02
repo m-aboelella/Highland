@@ -115,6 +115,35 @@ def test_search_returns_filtered_evidence_without_chat(tmp_path: Path) -> None:
     assert {item["chunk"]["customer_id"] for item in results} == {"cus_northwind"}
 
 
+def test_application_exposes_effective_models_limits_and_route_groups(tmp_path: Path) -> None:
+    client, _, _ = client_with_index(tmp_path)
+
+    workspace = client.get("/workspace/status")
+    agents = client.get("/agents")
+
+    assert workspace.status_code == 200
+    assert workspace.json()["models"] == {
+        "chat": "scripted-chat",
+        "embedding": "deterministic-embedding",
+        "rerank": "deterministic-rerank",
+    }
+    assert set(workspace.json()["limits"]) == {"agent", "provider"}
+    assert "model" not in agents.json()[0]
+    assert agents.json()[0]["models"] == workspace.json()["models"]
+    tags = {
+        tag
+        for operations in client.get("/openapi.json").json()["paths"].values()
+        for operation in operations.values()
+        for tag in operation.get("tags", [])
+    }
+    assert tags == {
+        "discover and runs",
+        "artifacts",
+        "workflows",
+        "platform operations",
+    }
+
+
 def test_chat_preserves_citations_context_and_current_filters(tmp_path: Path) -> None:
     client, chat, cited_id = client_with_index(tmp_path)
     conversation_id = client.post("/conversations", json={"title": "Review"}).json()["id"]

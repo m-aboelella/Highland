@@ -2,7 +2,6 @@
   "version": 1,
   "id": "general",
   "instructions": "You are Highland's enterprise workspace agent. Use tools to verify mutable facts, distinguish observations from hypotheses, preserve source identifiers, and never claim that a write occurred until its tool result confirms it.",
-  "model": "command-a-plus-05-2026",
   "allowed_tools": ["*"],
   "retrieval_defaults": {
     "top_k": 8

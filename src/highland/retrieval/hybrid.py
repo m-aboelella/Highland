@@ -3,9 +3,7 @@ from __future__ import annotations
 import math
 import re
 import time
-from collections.abc import Mapping
 from datetime import datetime
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -162,7 +160,7 @@ class HybridRetriever:
         *,
         vector_store: FaissStore,
         embedding_index: EmbeddingIndex,
-        rerankers: Mapping[Literal["fast", "pro"], RerankModel],
+        reranker: RerankModel,
         candidate_limit: int = 30,
         result_limit: int = 8,
     ) -> None:
@@ -172,7 +170,7 @@ class HybridRetriever:
         self.lexical = LexicalIndex(chunks)
         self.vector_store = vector_store
         self.embedding_index = embedding_index
-        self.rerankers = rerankers
+        self.reranker = reranker
         self.candidate_limit = candidate_limit
         self.result_limit = result_limit
 
@@ -181,7 +179,6 @@ class HybridRetriever:
         query: str,
         *,
         filters: RetrievalFilters,
-        rerank_profile: Literal["fast", "pro"] = "fast",
     ) -> RetrievalResponse:
         if not query.strip():
             raise ValueError("retrieval query cannot be empty")
@@ -219,11 +216,8 @@ class HybridRetriever:
         model_id: str | None = None
         results: list[RetrievalResult] = []
         if eligible:
-            if rerank_profile not in self.rerankers:
-                raise ValueError(f"rerank profile {rerank_profile!r} is not configured")
-            reranker = self.rerankers[rerank_profile]
             rerank_started = time.perf_counter()
-            response = await reranker.rerank(
+            response = await self.reranker.rerank(
                 RerankRequest(
                     query=query,
                     documents=[

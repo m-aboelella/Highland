@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from fastapi import BackgroundTasks, Body, FastAPI, Header, HTTPException, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Body,
+    FastAPI,
+    Header,
+    HTTPException,
+    Response,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -10,28 +19,19 @@ from pydantic import BaseModel, ConfigDict, Field
 from .artifacts import (
     ArtifactCitation,
     ArtifactGenerationError,
-    ArtifactGenerator,
-    ArtifactRepository,
     ArtifactType,
-    EvidenceCoverageChecker,
     EvidenceCoverageError,
     StaleArtifactRevision,
     export_markdown,
     export_pdf,
     safe_export_filename,
 )
-from .discover.conversations import ConversationStore
-from .discover.service import ChatRequest, DiscoverFilters, DiscoverService, SearchRequest
-from .models.provider import ModelProvider, build_model_provider
+from .discover.service import ChatRequest, DiscoverFilters, SearchRequest
+from .models.provider import ModelProvider
 from .retrieval.citations import CitationResolver
-from .retrieval.sources import MCPSourceReader
-from .retrieval.sync import IndexSynchronizer
-from .runtime.agent import AgentProfile
-from .runtime.approvals import ApprovalStore
-from .runtime.cancellation import RunCancellationStore
-from .runtime.events import RunEventStore
 from .runtime.mcp import MCPGateway
 from .runtime.policy import ToolRegistry
+from .services import ApplicationServices
 from .settings import HighlandSettings
 from .workflows import (
     PlannerRecord,
@@ -39,11 +39,7 @@ from .workflows import (
     WorkflowExecutor,
     WorkflowPlanner,
     WorkflowPlanningError,
-    WorkflowRepository,
-    WorkflowRunRepository,
 )
-from .workflows.schedules import WorkflowScheduleRepository
-from .workspace import WorkspacePaths
 
 
 class ApiModel(BaseModel):
@@ -121,53 +117,39 @@ class ScheduleWorkflowRequest(ApiModel):
     interval_seconds: int = Field(ge=60)
 
 
-def create_app(
-    settings: HighlandSettings | None = None,
-    *,
-    model_provider: ModelProvider | None = None,
-) -> FastAPI:
-    configured = settings or HighlandSettings()
-    workspace = WorkspacePaths.from_root(configured.workspace_dir)
-    workspace.ensure()
-    app = FastAPI(title="Highland", version="0.1.0")
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["http://127.0.0.1:3000", "http://localhost:3000"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    approvals = ApprovalStore(workspace.runs / "approvals")
-    run_events = RunEventStore(workspace.runs / "events")
-    cancellations = RunCancellationStore(workspace.runs / "cancellations")
-    conversations = ConversationStore(workspace.conversations)
-    artifacts = ArtifactRepository(workspace.artifacts)
-    provider = model_provider or build_model_provider(configured)
-    artifact_generator = ArtifactGenerator(provider.chat, artifacts)
-    coverage_checker = EvidenceCoverageChecker(provider.chat)
-    workflows = WorkflowRepository(workspace.workflows)
-    workflow_runs = WorkflowRunRepository(workspace.runs / "workflows")
-    workflow_schedules = WorkflowScheduleRepository(workspace.workflows / "schedules")
-    discover = DiscoverService(
-        index_dir=workspace.indexes / "search",
-        conversations=conversations,
-        runs_dir=workspace.runs,
-        provider=provider,
-        profile=AgentProfile.load(configured.agent_profile_config),
-        tool_policy=configured.tool_policy_config,
-        connector_commands=configured.connector_commands,
-        connector_timeout_seconds=configured.connector_timeout_seconds,
-    )
+def register_api_routes(app: FastAPI, services: ApplicationServices) -> None:
+    """Register the four HTTP teaching surfaces without constructing dependencies."""
+    configured = services.settings
+    workspace = services.workspace
+    approvals = services.approvals
+    run_events = services.run_events
+    cancellations = services.cancellations
+    conversations = services.conversations
+    artifacts = services.artifacts
+    provider = services.provider
+    artifact_generator = services.artifact_generator
+    coverage_checker = services.coverage_checker
+    workflows = services.workflows
+    workflow_runs = services.workflow_runs
+    workflow_schedules = services.workflow_schedules
+    discover = services.discover
+    platform = APIRouter(tags=["platform operations"])
+    workflow_routes = APIRouter(tags=["workflows"])
+    artifact_routes = APIRouter(tags=["artifacts"])
+    discover_routes = APIRouter(tags=["discover and runs"])
 
-    @app.get("/health")
+    @platform.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok", "model_backend": configured.model_backend.value}
 
-    @app.get("/workspace/status")
+    @platform.get("/workspace/status")
     async def workspace_status() -> dict[str, object]:
-        manifest = synchronizer().status()
+        manifest = services.synchronizer().status()
         return {
             "workspace": configured.workspace_name,
             "model_mode": configured.model_backend.value,
+            "models": services.effective_models(),
+            "limits": services.effective_limits(),
             "index": {
                 "state": manifest.state.value if manifest else "missing",
                 "records": len(manifest.records) if manifest else 0,
@@ -179,12 +161,17 @@ def create_app(
             "run": {"state": "idle"},
         }
 
-    @app.get("/agents")
+    @platform.get("/agents")
     async def list_agents() -> list[dict[str, object]]:
-        profile = AgentProfile.load(configured.agent_profile_config)
-        return [profile.model_dump(mode="json")]
+        return [
+            {
+                **services.profile.model_dump(mode="json"),
+                "models": services.effective_models(),
+                "limits": services.effective_limits(),
+            }
+        ]
 
-    @app.post("/workflows/draft")
+    @workflow_routes.post("/workflows/draft")
     async def draft_workflow(request: DraftWorkflowRequest) -> dict[str, object]:
         async with MCPGateway(
             configured.connector_commands,
@@ -203,7 +190,7 @@ def create_app(
                 raise HTTPException(status_code=422, detail=str(error)) from error
         return draft.model_dump(mode="json")
 
-    @app.post("/workflows", status_code=status.HTTP_201_CREATED)
+    @workflow_routes.post("/workflows", status_code=status.HTTP_201_CREATED)
     async def save_workflow(request: SaveWorkflowRequest) -> dict[str, object]:
         saved = workflows.save_draft(request.workflow)
         payload = saved.model_dump(mode="json")
@@ -211,11 +198,11 @@ def create_app(
             payload["planner"] = request.planner.model_dump(mode="json")
         return payload
 
-    @app.get("/workflows")
+    @workflow_routes.get("/workflows")
     async def list_workflows() -> list[dict[str, object]]:
         return [workflow.model_dump(mode="json") for workflow in workflows.list()]
 
-    @app.get("/workflows/{workflow_id}")
+    @workflow_routes.get("/workflows/{workflow_id}")
     async def get_workflow(workflow_id: str) -> dict[str, object]:
         try:
             draft = workflows.get_draft(workflow_id)
@@ -224,22 +211,19 @@ def create_app(
         return {
             "draft": draft.model_dump(mode="json"),
             "versions": [
-                version.model_dump(mode="json")
-                for version in workflows.list_versions(workflow_id)
+                version.model_dump(mode="json") for version in workflows.list_versions(workflow_id)
             ],
         }
 
-    @app.post("/workflows/{workflow_id}/publish")
+    @workflow_routes.post("/workflows/{workflow_id}/publish")
     async def publish_workflow(workflow_id: str) -> dict[str, object]:
         try:
             return workflows.publish(workflow_id).model_dump(mode="json")
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Workflow draft not found") from None
 
-    @app.post("/workflows/{workflow_id}/runs")
-    async def run_workflow(
-        workflow_id: str, request: RunWorkflowRequest
-    ) -> dict[str, object]:
+    @workflow_routes.post("/workflows/{workflow_id}/runs")
+    async def run_workflow(workflow_id: str, request: RunWorkflowRequest) -> dict[str, object]:
         if request.test:
             try:
                 definition = workflows.get_draft(workflow_id)
@@ -278,9 +262,14 @@ def create_app(
                 trigger=request.trigger,
             )
         for node in run.nodes.values():
-            event_type = "model_call" if definition.model_dump()["nodes"][
-                [item.id for item in definition.nodes].index(node.node_id)
-            ]["kind"] == "generate" else "tool_call"
+            event_type = (
+                "model_call"
+                if definition.model_dump()["nodes"][
+                    [item.id for item in definition.nodes].index(node.node_id)
+                ]["kind"]
+                == "generate"
+                else "tool_call"
+            )
             run_events.append(
                 run_id,
                 event_type,
@@ -313,11 +302,11 @@ def create_app(
             "trace_url": f"/runs/{run_id}/trace",
         }
 
-    @app.get("/workflow-runs")
+    @workflow_routes.get("/workflow-runs")
     async def list_workflow_runs() -> list[dict[str, object]]:
         return [run.model_dump(mode="json") for run in workflow_runs.list()]
 
-    @app.post("/workflows/{workflow_id}/schedules", status_code=status.HTTP_201_CREATED)
+    @workflow_routes.post("/workflows/{workflow_id}/schedules", status_code=status.HTTP_201_CREATED)
     async def schedule_workflow(
         workflow_id: str, request: ScheduleWorkflowRequest
     ) -> dict[str, object]:
@@ -331,12 +320,14 @@ def create_app(
             published, interval_seconds=request.interval_seconds
         ).model_dump(mode="json")
 
-    @app.post("/artifacts", status_code=status.HTTP_201_CREATED)
+    @artifact_routes.post("/artifacts", status_code=status.HTTP_201_CREATED)
     async def create_artifact(request: CreateArtifactRequest) -> dict[str, object]:
         try:
             conversation = conversations.get(request.conversation_id)
         except FileNotFoundError:
-            raise HTTPException(status_code=404, detail="Originating conversation not found") from None
+            raise HTTPException(
+                status_code=404, detail="Originating conversation not found"
+            ) from None
         if not any(message.run_id == request.run_id for message in conversation.messages):
             raise HTTPException(
                 status_code=422,
@@ -345,12 +336,14 @@ def create_app(
         artifact = artifacts.create(**request.model_dump())
         return artifact.model_dump(mode="json")
 
-    @app.post("/artifacts/generate", status_code=status.HTTP_201_CREATED)
+    @artifact_routes.post("/artifacts/generate", status_code=status.HTTP_201_CREATED)
     async def generate_artifact(request: GenerateArtifactRequest) -> dict[str, object]:
         try:
             conversation = conversations.get(request.conversation_id)
         except FileNotFoundError:
-            raise HTTPException(status_code=404, detail="Originating conversation not found") from None
+            raise HTTPException(
+                status_code=404, detail="Originating conversation not found"
+            ) from None
         message = next(
             (item for item in conversation.messages if item.id == request.message_id),
             None,
@@ -385,18 +378,18 @@ def create_app(
             raise HTTPException(status_code=422, detail=str(error)) from error
         return artifact.model_dump(mode="json")
 
-    @app.get("/artifacts")
+    @artifact_routes.get("/artifacts")
     async def list_artifacts() -> list[dict[str, object]]:
         return [artifact.model_dump(mode="json") for artifact in artifacts.list()]
 
-    @app.get("/artifacts/{artifact_id}")
+    @artifact_routes.get("/artifacts/{artifact_id}")
     async def get_artifact(artifact_id: str) -> dict[str, object]:
         try:
             return artifacts.get(artifact_id).model_dump(mode="json")
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Artifact not found") from None
 
-    @app.post("/artifacts/{artifact_id}/evidence-coverage")
+    @artifact_routes.post("/artifacts/{artifact_id}/evidence-coverage")
     async def check_artifact_evidence(artifact_id: str) -> dict[str, object]:
         try:
             report = await coverage_checker.check(artifacts.get(artifact_id))
@@ -406,7 +399,7 @@ def create_app(
             raise HTTPException(status_code=422, detail=str(error)) from error
         return report.model_dump(mode="json")
 
-    @app.get("/artifacts/{artifact_id}/export.md")
+    @artifact_routes.get("/artifacts/{artifact_id}/export.md")
     async def export_artifact_markdown(artifact_id: str) -> Response:
         try:
             artifact = artifacts.get(artifact_id)
@@ -419,7 +412,7 @@ def create_app(
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
-    @app.get("/artifacts/{artifact_id}/export.pdf")
+    @artifact_routes.get("/artifacts/{artifact_id}/export.pdf")
     async def export_artifact_pdf(artifact_id: str) -> Response:
         try:
             artifact = artifacts.get(artifact_id)
@@ -432,7 +425,7 @@ def create_app(
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
-    @app.patch("/artifacts/{artifact_id}")
+    @artifact_routes.patch("/artifacts/{artifact_id}")
     async def update_artifact(
         artifact_id: str, request: UpdateArtifactRequest
     ) -> dict[str, object]:
@@ -447,7 +440,7 @@ def create_app(
             raise HTTPException(status_code=409, detail=str(error)) from error
         return artifact.model_dump(mode="json")
 
-    @app.post("/artifacts/{artifact_id}/sections/revise")
+    @artifact_routes.post("/artifacts/{artifact_id}/sections/revise")
     async def revise_artifact_section(
         artifact_id: str,
         request: ReviseArtifactSectionRequest,
@@ -463,7 +456,7 @@ def create_app(
             raise HTTPException(status_code=409, detail=str(error)) from error
         return preview.model_dump(mode="json")
 
-    @app.delete("/artifacts/{artifact_id}", status_code=status.HTTP_204_NO_CONTENT)
+    @artifact_routes.delete("/artifacts/{artifact_id}", status_code=status.HTTP_204_NO_CONTENT)
     async def delete_artifact(artifact_id: str) -> Response:
         try:
             artifacts.delete(artifact_id)
@@ -471,77 +464,65 @@ def create_app(
             raise HTTPException(status_code=404, detail="Artifact not found") from None
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    @app.get("/artifacts/{artifact_id}/revisions")
+    @artifact_routes.get("/artifacts/{artifact_id}/revisions")
     async def list_artifact_revisions(artifact_id: str) -> list[dict[str, object]]:
         try:
             return [
-                revision.model_dump(mode="json")
-                for revision in artifacts.revisions(artifact_id)
+                revision.model_dump(mode="json") for revision in artifacts.revisions(artifact_id)
             ]
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Artifact not found") from None
 
-    @app.get("/artifacts/{artifact_id}/revisions/{revision}")
+    @artifact_routes.get("/artifacts/{artifact_id}/revisions/{revision}")
     async def get_artifact_revision(artifact_id: str, revision: int) -> dict[str, object]:
         try:
             return artifacts.revision(artifact_id, revision).model_dump(mode="json")
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Artifact revision not found") from None
 
-    def synchronizer() -> IndexSynchronizer:
-        return IndexSynchronizer(
-            MCPSourceReader(
-                configured.connector_commands,
-                timeout_seconds=configured.connector_timeout_seconds,
-            ),
-            index_dir=workspace.indexes / "search",
-            reports_dir=workspace.synchronization,
-            embedding_model=provider.embeddings,
-        )
-
-    @app.get("/index/status")
+    @platform.get("/index/status")
     async def index_status() -> dict[str, object]:
-        manifest = synchronizer().status()
+        manifest = services.synchronizer().status()
         return (
             manifest.model_dump(mode="json")
             if manifest
             else {"state": "missing", "records": {}, "source_counts": {}}
         )
 
-    @app.post("/index/sync")
+    @platform.post("/index/sync")
     async def index_sync() -> dict[str, object]:
-        return (await synchronizer().sync()).model_dump(mode="json")
+        return (await services.synchronizer().sync()).model_dump(mode="json")
 
-    @app.post("/index/rebuild")
+    @platform.post("/index/rebuild")
     async def index_rebuild() -> dict[str, object]:
-        return (await synchronizer().rebuild()).model_dump(mode="json")
+        return (await services.synchronizer().rebuild()).model_dump(mode="json")
 
-    @app.get("/index/chunks/{chunk_id}")
+    @platform.get("/index/chunks/{chunk_id}")
     async def inspect_chunk(chunk_id: str) -> dict[str, object]:
         chunk = CitationResolver(workspace.indexes / "search").get_chunk(chunk_id)
         if chunk is None:
             raise HTTPException(status_code=404, detail="Indexed chunk not found")
         return chunk.model_dump(mode="json")
 
-    @app.post("/conversations", status_code=status.HTTP_201_CREATED)
+    @discover_routes.post("/conversations", status_code=status.HTTP_201_CREATED)
     async def create_conversation(
         request: CreateConversationRequest | None = None,
     ) -> dict[str, object]:
         conversation = conversations.create(request.title if request else None)
         return conversation.model_dump(mode="json")
 
-    @app.get("/conversations")
+    @discover_routes.get("/conversations")
     async def list_conversations() -> list[dict[str, object]]:
         return [item.model_dump(mode="json") for item in conversations.list()]
 
-    @app.get("/conversations/{conversation_id}")
+    @discover_routes.get("/conversations/{conversation_id}")
     async def get_conversation(conversation_id: str) -> dict[str, object]:
         try:
             return conversations.get(conversation_id).model_dump(mode="json")
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Conversation not found") from None
 
-    @app.patch("/conversations/{conversation_id}")
+    @discover_routes.patch("/conversations/{conversation_id}")
     async def rename_conversation(
         conversation_id: str,
         request: RenameConversationRequest,
@@ -551,7 +532,9 @@ def create_app(
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Conversation not found") from None
 
-    @app.delete("/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+    @discover_routes.delete(
+        "/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT
+    )
     async def delete_conversation(conversation_id: str) -> Response:
         try:
             conversations.delete(conversation_id)
@@ -559,7 +542,9 @@ def create_app(
             raise HTTPException(status_code=404, detail="Conversation not found") from None
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    @app.post("/conversations/{conversation_id}/messages", status_code=status.HTTP_201_CREATED)
+    @discover_routes.post(
+        "/conversations/{conversation_id}/messages", status_code=status.HTTP_201_CREATED
+    )
     async def add_message(
         conversation_id: str,
         request: CreateMessageRequest,
@@ -571,7 +556,9 @@ def create_app(
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Conversation not found") from None
 
-    @app.post("/conversations/{conversation_id}/runs", status_code=status.HTTP_202_ACCEPTED)
+    @discover_routes.post(
+        "/conversations/{conversation_id}/runs", status_code=status.HTTP_202_ACCEPTED
+    )
     async def create_run(
         conversation_id: str,
         request: CreateRunRequest,
@@ -619,7 +606,7 @@ def create_app(
                 {"error_type": type(error).__name__, "message": str(error)},
             )
 
-    @app.post("/runs/{run_id}/cancel", status_code=status.HTTP_202_ACCEPTED)
+    @discover_routes.post("/runs/{run_id}/cancel", status_code=status.HTTP_202_ACCEPTED)
     async def cancel_run(
         run_id: str,
         request: CancelRunRequest | None = None,
@@ -629,7 +616,7 @@ def create_app(
             run_events.append(run_id, "run_cancelled", payload)
         return {**payload, "status": "cancelled"}
 
-    @app.post("/discover/search")
+    @discover_routes.post("/discover/search")
     async def discover_search(request: SearchRequest) -> dict[str, object]:
         try:
             result = await discover.search(request)
@@ -637,7 +624,7 @@ def create_app(
             raise HTTPException(status_code=409, detail=str(error)) from error
         return result.model_dump(mode="json")
 
-    @app.post("/discover/chat")
+    @discover_routes.post("/discover/chat")
     async def discover_chat(request: ChatRequest) -> dict[str, object]:
         run_id = f"run_{uuid4().hex}"
         try:
@@ -656,60 +643,61 @@ def create_app(
             "conversation_id": request.conversation_id,
             "message_id": message.id,
             "sources": [
-                source.model_dump(mode="json")
-                for source in conversation.messages[-1].sources
+                source.model_dump(mode="json") for source in conversation.messages[-1].sources
             ],
         }
 
-    @app.get("/approvals/{approval_id}")
+    @platform.get("/approvals/{approval_id}")
     async def get_approval(approval_id: str) -> dict[str, object]:
         try:
             return approvals.get(approval_id).model_dump(mode="json")
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Approval not found") from None
 
-    @app.post("/approvals/{approval_id}/approve")
+    @platform.post("/approvals/{approval_id}/approve")
     async def approve(
         approval_id: str,
         reason: str | None = Body(default=None, embed=True),
     ) -> dict[str, object]:
         try:
-            return approvals.decide(approval_id, approve=True, reason=reason).model_dump(mode="json")
+            return approvals.decide(approval_id, approve=True, reason=reason).model_dump(
+                mode="json"
+            )
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Approval not found") from None
         except ValueError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
 
-    @app.post("/approvals/{approval_id}/reject")
+    @platform.post("/approvals/{approval_id}/reject")
     async def reject(
         approval_id: str,
         reason: str | None = Body(default=None, embed=True),
     ) -> dict[str, object]:
         try:
-            return approvals.decide(approval_id, approve=False, reason=reason).model_dump(mode="json")
+            return approvals.decide(approval_id, approve=False, reason=reason).model_dump(
+                mode="json"
+            )
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Approval not found") from None
         except ValueError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
 
-    @app.get("/runs/{run_id}/summary")
+    @discover_routes.get("/runs/{run_id}/summary")
     async def run_summary(run_id: str) -> dict[str, object]:
         return run_events.summary(run_id)
 
-    @app.get("/runs/{run_id}/trace")
+    @discover_routes.get("/runs/{run_id}/trace")
     async def run_trace(run_id: str) -> list[dict[str, object]]:
         return [event.model_dump(mode="json") for event in run_events.replay(run_id)]
 
-    @app.get("/runs/{run_id}/evidence")
+    @discover_routes.get("/runs/{run_id}/evidence")
     async def run_evidence(run_id: str) -> dict[str, object]:
         events = run_events.replay(run_id)
         retrieval = next(
             (event.payload for event in events if event.type.value == "retrieval"),
             {},
         )
-        citations = [
-            event.payload for event in events if event.type.value == "citation"
-        ]
+        citations = [event.payload for event in events if event.type.value == "citation"]
         source_ids = {
             source_id
             for citation in citations
@@ -733,7 +721,7 @@ def create_app(
             "refreshed_through_mcp": refreshed,
         }
 
-    @app.get("/runs/{run_id}/events")
+    @discover_routes.get("/runs/{run_id}/events")
     async def stream_run_events(
         run_id: str,
         last_event_id: int = Header(default=0, alias="Last-Event-ID"),
@@ -744,6 +732,28 @@ def create_app(
 
         return StreamingResponse(stream(), media_type="text/event-stream")
 
+    app.include_router(discover_routes)
+    app.include_router(artifact_routes)
+    app.include_router(workflow_routes)
+    app.include_router(platform)
+
+
+def create_app(
+    settings: HighlandSettings | None = None,
+    *,
+    model_provider: ModelProvider | None = None,
+) -> FastAPI:
+    configured = settings or HighlandSettings()
+    services = ApplicationServices.build(configured, model_provider=model_provider)
+    app = FastAPI(title="Highland", version="0.1.0")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://127.0.0.1:3000", "http://localhost:3000"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    app.state.services = services
+    register_api_routes(app, services)
     return app
 
 

@@ -46,7 +46,6 @@ class AgentProfile(RuntimeModel):
     version: int
     id: str
     instructions: str
-    model: str
     allowed_tools: list[str]
     retrieval_defaults: dict[str, Any]
     budgets: AgentBudgets

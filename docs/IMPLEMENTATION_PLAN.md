@@ -228,6 +228,9 @@ User
 | M6 — Automate workflows | ✅ Implemented | 7/7 | Small model-assisted workflow system |
 | M7 — Evaluation and reliability | ✅ Implemented | 5/5 | Deterministic and live-model evidence |
 | M8 — Self-hosted learning experience | ✅ Implemented | 5/5 | One-key stack and teaching path |
+| M9 — Simpler code structure | 🟡 In progress | 1/2 | Clear composition, configuration, and mock ownership |
+| M10 — Faithful evaluation | ⬜ Not started | 0/2 | Production-path retrieval and agent evaluation |
+| M11 — Reproducible learning environment | ⬜ Not started | 0/2 | Locked setup, smoke tests, and experiment guidance |
 
 ---
 
@@ -1926,6 +1929,222 @@ docker compose config --quiet
 
 ---
 
+# M9 — Simpler code structure
+
+**Milestone status:** 🟡 In progress
+**Milestone outcome:** Highland retains all capabilities while gaining clearer
+composition, configuration, and mock-system ownership.
+
+## E9.1 — Simplify application composition
+
+**Status:** ✅ Implemented
+**Implemented in:** this commit
+**Depends on:** M0 through M8
+
+Scope:
+
+- Add a typed application-services composition object for providers,
+  repositories, retrieval, runtime, artifacts, workflows, and operations.
+- Reduce `create_app()` to application setup and router registration; group
+  routes by Discover/runs, artifacts, workflows, and platform operations.
+- Preserve existing URLs and response contracts.
+- Make environment-backed settings authoritative for model IDs, remove unused
+  model selection from the agent profile, and remove misleading request-level
+  rerank profiles that resolve to the same configured model.
+- Distinguish agent-turn limits from provider usage and cost limits in status
+  and traces while keeping the agent loop linear and recognizable.
+
+Delivered:
+
+- Added the typed `ApplicationServices` composition root used by the FastAPI
+  application and available to evaluation entrypoints.
+- Reduced `create_app()` to middleware, composition, and registration of four
+  named HTTP teaching surfaces while preserving every URL and response shape.
+- Removed the duplicate model choice from the agent profile and the request
+  rerank profile aliases; configured provider instances now identify the models
+  that status, agent metadata, and retrieval traces report.
+- Separated agent-loop constraints from provider usage and cost limits in the
+  operational API and retrieval trace metadata.
+
+Verification:
+
+```bash
+pytest tests/test_api.py tests/unit/runtime tests/unit/models
+pytest tests/acceptance/test_discover_api.py
+```
+
+Suggested commit:
+
+```text
+Simplify Highland application composition
+```
+
+## E9.2 — Organize mock systems by source
+
+**Status:** ⬜ Not started
+**Implemented in:** —
+**Depends on:** E9.1
+
+Scope:
+
+- Give each fictional system one vertical module containing its seed fragment,
+  REST routes, and MCP tool registration.
+- Keep shared storage, identifiers, errors, and reset behavior centralized.
+- Preserve ports, generated seed content, REST schemas, MCP tool names, and
+  idempotency behavior.
+- Do not introduce a plugin framework or dynamic discovery layer.
+
+Verification:
+
+```bash
+pytest tests/test_seed.py tests/test_mcp.py tests/test_api.py
+pytest tests/integration/test_mcp_gateway.py
+```
+
+Suggested commit:
+
+```text
+Organize mock systems by source boundary
+```
+
+---
+
+# M10 — Faithful evaluation
+
+**Milestone status:** ⬜ Not started
+**Milestone outcome:** Algorithm and model changes are measured through the
+same retrieval, agent, MCP, policy, and workflow paths used by the application.
+
+## E10.1 — Benchmark production retrieval
+
+**Status:** ⬜ Not started
+**Implemented in:** —
+**Depends on:** M9
+
+Scope:
+
+- Delete the evaluation-only token ranker and evaluate through the production
+  hybrid retriever.
+- Add a reviewed relevance set covering identifiers, paraphrases, filters,
+  stale content, no-answer cases, and customer isolation.
+- Report candidate recall, precision and recall at k, MRR at k, latency, stage
+  loss, leakage, effective model IDs, corpus hash, and index fingerprint.
+- Commit a deterministic baseline and extend `highland eval retrieval` with
+  baseline comparison and enforcement.
+- Require an isolated index rebuild when the embedding model changes; keep live
+  Cohere calls explicitly opted in and budget controlled.
+
+Verification:
+
+```bash
+pytest tests/unit/evaluation/test_retrieval.py
+pytest tests/unit/retrieval tests/integration/test_index_incremental_sync.py
+highland eval retrieval --enforce-baseline
+```
+
+Suggested commit:
+
+```text
+Benchmark the production retrieval pipeline
+```
+
+## E10.2 — Evaluate production orchestration
+
+**Status:** ⬜ Not started
+**Implemented in:** —
+**Depends on:** E10.1
+
+Scope:
+
+- Run scenarios through the application composition, Discover service, agent
+  loop, MCP gateway, tool policy, approvals, traces, and workflow executor.
+- Remove direct evaluation calls that provide all seed records to Chat.
+- Reject approval requests during evaluation so no external write executes.
+- Keep citations, isolation, tool selection, approvals, and trace checks
+  deterministic; use Cohere structured output only for semantic grading.
+- Add repeated-run aggregation for pass rate, semantic scores, latency, usage,
+  cost, effective configuration, and trace references.
+
+Verification:
+
+```bash
+pytest tests/unit/evaluation/test_scenarios.py
+pytest tests/acceptance tests/integration/test_customer_isolation.py
+pytest tests/reliability
+```
+
+Suggested commit:
+
+```text
+Evaluate Highland through production orchestration
+```
+
+---
+
+# M11 — Reproducible learning environment
+
+**Milestone status:** ⬜ Not started
+**Milestone outcome:** Clean checkouts produce reproducible dependencies,
+startup, and experiments across supported machines.
+
+## E11.1 — Lock and smoke-test the runtime
+
+**Status:** ⬜ Not started
+**Implemented in:** —
+**Depends on:** M10
+
+Scope:
+
+- Lock Python production and development dependencies, including Cohere and
+  MCP, and consume the locks in local setup, CI, and Docker builds.
+- Keep Compose as the canonical cross-platform runtime and add a PowerShell
+  equivalent of the guided bootstrap.
+- Add a clean-checkout scripted Compose smoke test covering index creation, API
+  health, search, UI availability, and shutdown.
+
+Verification:
+
+```bash
+make ci
+docker compose config --quiet
+```
+
+Suggested commit:
+
+```text
+Lock and smoke-test the Highland runtime
+```
+
+## E11.2 — Document reproducible experiments
+
+**Status:** ⬜ Not started
+**Implemented in:** —
+**Depends on:** E11.1
+
+Scope:
+
+- Update architecture documentation for the refactored boundaries and
+  production evaluation path.
+- Document one concise algorithm or model comparison using the committed
+  relevance set and baseline, including embedding index rebuild requirements.
+- Update testing and release guidance without adding another documentation
+  hierarchy; require baseline enforcement and the Compose smoke test.
+
+Verification:
+
+```bash
+pytest tests/docs
+make release-check
+```
+
+Suggested commit:
+
+```text
+Document reproducible Highland experiments
+```
+
+---
+
 # Working agreement for future Codex sessions
 
 ## Session startup
@@ -1994,7 +2213,7 @@ E1.* + E2.1 -> E2.4 -> E2.5 -> E2.6
 E3.2 + model providers -> E3.3 -> E3.4 -> E3.5 -> E3.6
 M2 + M3 -> M4 -> M5
 M2 + M3 + M5 -> M6
-M3 through M6 -> M7 -> M8
+M3 through M6 -> M7 -> M8 -> M9 -> M10 -> M11
 ```
 
 E3.1 is intentionally required by E2.2 because index population should teach
@@ -2005,7 +2224,7 @@ behind the connector layer.
 
 Highland is complete when:
 
-- all epics through M8 are implemented or explicitly moved out of scope with a
+- all epics through M11 are implemented or explicitly moved out of scope with a
   documented reason;
 - the default suite is deterministic, offline, and non-billable;
 - the three live Cohere scenarios can be run separately with explicit opt-in;

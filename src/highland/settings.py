@@ -68,7 +68,6 @@ class HighlandSettings(BaseSettings):
 
     request_timeout_seconds: float = Field(default=30.0, gt=0)
     connector_timeout_seconds: float = Field(default=15.0, gt=0)
-    max_steps_per_run: int = Field(default=20, gt=0)
     max_model_calls_per_run: int = Field(default=10, gt=0)
     max_rerank_searches_per_run: int = Field(default=10, gt=0)
     max_tokens_per_run: int = Field(default=100_000, gt=0)

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -39,7 +38,6 @@ class DiscoverFilters(DiscoverModel):
 class SearchRequest(DiscoverModel):
     query: str = Field(min_length=1, max_length=20_000)
     filters: DiscoverFilters = Field(default_factory=DiscoverFilters)
-    rerank_profile: Literal["fast", "pro"] = "fast"
 
 
 class ChatRequest(SearchRequest):
@@ -58,6 +56,7 @@ class DiscoverService:
         tool_policy: Path,
         connector_commands: dict[str, tuple[str, ...]],
         connector_timeout_seconds: float,
+        trace_context: dict[str, object] | None = None,
     ) -> None:
         self.index_dir = index_dir
         self.conversations = conversations
@@ -67,6 +66,7 @@ class DiscoverService:
         self.tool_policy = tool_policy
         self.connector_commands = connector_commands
         self.connector_timeout_seconds = connector_timeout_seconds
+        self.trace_context = trace_context or {}
 
     def _retriever(self) -> HybridRetriever:
         chunks = load_chunks(self.index_dir)
@@ -81,14 +81,13 @@ class DiscoverService:
             chunks,
             vector_store=vectors,
             embedding_index=indexer,
-            rerankers={"fast": self.provider.rerank, "pro": self.provider.rerank},
+            reranker=self.provider.rerank,
         )
 
     async def search(self, request: SearchRequest) -> RetrievalResponse:
         return await self._retriever().search(
             request.query,
             filters=request.filters.retrieval(),
-            rerank_profile=request.rerank_profile,
         )
 
     async def chat(self, request: ChatRequest, *, run_id: str) -> RunOutcome:
@@ -135,10 +134,9 @@ class DiscoverService:
                     }
                     for result in retrieval.results
                 ],
-                "diagnostics": [
-                    item.model_dump(mode="json") for item in retrieval.diagnostics
-                ],
+                "diagnostics": [item.model_dump(mode="json") for item in retrieval.diagnostics],
                 "timings": retrieval.timings.model_dump(mode="json"),
+                "execution": self.trace_context,
             },
         )
         gateway = MCPGateway(
@@ -189,12 +187,10 @@ class DiscoverService:
             )
             for result in retrieval.results
         }
-        cited = {
-            source_id
-            for citation in outcome.citations
-            for source_id in citation.source_ids
-        }
-        sources = [sources_by_chunk[source_id] for source_id in cited if source_id in sources_by_chunk]
+        cited = {source_id for citation in outcome.citations for source_id in citation.source_ids}
+        sources = [
+            sources_by_chunk[source_id] for source_id in cited if source_id in sources_by_chunk
+        ]
         self.conversations.append_message(
             request.conversation_id,
             role="assistant",

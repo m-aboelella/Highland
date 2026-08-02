@@ -68,7 +68,7 @@ async def test_semantic_candidates_are_reranked_with_provenance(tmp_path) -> Non
         chunks,
         vector_store=store,
         embedding_index=index,
-        rerankers={"fast": reranker},
+        reranker=reranker,
     ).search(
         "memory pressure",
         filters=RetrievalFilters(allowed_visibilities={"support"}),

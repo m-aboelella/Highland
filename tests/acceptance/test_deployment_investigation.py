@@ -129,7 +129,7 @@ async def _retrieval(tmp_path: Path):
         chunks,
         vector_store=vector_store,
         embedding_index=embedding_index,
-        rerankers={"fast": RelevantFirstReranker()},
+        reranker=RelevantFirstReranker(),
         candidate_limit=100,
         result_limit=30,
     )

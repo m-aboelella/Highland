@@ -44,7 +44,7 @@ async def test_other_customer_text_never_reaches_rerank(tmp_path) -> None:
         chunks,
         vector_store=store,
         embedding_index=index,
-        rerankers={"fast": reranker},
+        reranker=reranker,
     ).search(
         "Shared latency phrase",
         filters=RetrievalFilters(
