@@ -1,12 +1,17 @@
-.PHONY: bootstrap setup generate dev test reset lint typecheck web-test web-build repository-check ci release-check
+.PHONY: bootstrap setup lock generate dev test reset lint typecheck web-test web-build repository-check ci release-check compose-smoke
 
 bootstrap:
 	./bootstrap.sh
 
 setup:
 	python3 -m venv .venv
-	.venv/bin/pip install -e '.[dev]'
+	.venv/bin/pip install -r requirements-dev.lock
+	.venv/bin/pip install --no-deps -e .
 	.venv/bin/highland-mocks generate
+
+lock:
+	.venv/bin/pip-compile pyproject.toml --output-file=requirements.lock --strip-extras
+	.venv/bin/pip-compile pyproject.toml --extra=dev --output-file=requirements-dev.lock --strip-extras
 
 generate:
 	.venv/bin/highland-mocks generate
@@ -35,8 +40,12 @@ web-build:
 
 repository-check:
 	.venv/bin/python scripts/check_repository.py
+	.venv/bin/python scripts/check_dependency_locks.py
 
 ci: lint typecheck repository-check test web-test web-build
+
+compose-smoke:
+	./scripts/compose_smoke.sh
 
 release-check: ci
 	.venv/bin/pytest tests/docs tests/unit/test_maintenance.py \

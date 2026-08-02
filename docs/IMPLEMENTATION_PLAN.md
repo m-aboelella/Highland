@@ -230,7 +230,7 @@ User
 | M8 — Self-hosted learning experience | ✅ Implemented | 5/5 | One-key stack and teaching path |
 | M9 — Simpler code structure | ✅ Implemented | 2/2 | Clear composition, configuration, and mock ownership |
 | M10 — Faithful evaluation | ✅ Implemented | 2/2 | Production-path retrieval and agent evaluation |
-| M11 — Reproducible learning environment | ⬜ Not started | 0/2 | Locked setup, smoke tests, and experiment guidance |
+| M11 — Reproducible learning environment | 🟨 In progress | 1/2 | Locked setup, smoke tests, and experiment guidance |
 
 ---
 
@@ -2121,14 +2121,14 @@ Implementation notes:
 
 # M11 — Reproducible learning environment
 
-**Milestone status:** ⬜ Not started
+**Milestone status:** 🟨 In progress
 **Milestone outcome:** Clean checkouts produce reproducible dependencies,
 startup, and experiments across supported machines.
 
 ## E11.1 — Lock and smoke-test the runtime
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** `Lock and smoke-test the Highland runtime`
 **Depends on:** M10
 
 Scope:
@@ -2152,6 +2152,19 @@ Suggested commit:
 ```text
 Lock and smoke-test the Highland runtime
 ```
+
+Delivered:
+
+- Compiled production and development dependency locks pin the full Python
+  graph, including Cohere and MCP, while `pyproject.toml` remains the readable
+  declaration of supported ranges.
+- Local setup, CI, and the Python container install the appropriate lock before
+  installing Highland itself without dependency re-resolution.
+- `bootstrap.ps1` mirrors the guided live-model startup on Windows, while
+  Compose remains the common runtime on every platform.
+- `make compose-smoke` starts scripted Compose, verifies the completed index
+  bootstrap, API health, a real indexed search, and the UI, then always shuts
+  the stack down.
 
 ## E11.2 — Document reproducible experiments
 

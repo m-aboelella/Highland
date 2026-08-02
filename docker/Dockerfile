@@ -8,11 +8,12 @@ RUN apt-get update \
         libpango-1.0-0 \
         libpangoft2-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md requirements.lock ./
 COPY src ./src
 COPY data ./data
 COPY config ./config
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir -r requirements.lock \
+    && pip install --no-cache-dir --no-deps .
 
 ENV HIGHLAND_SEED_DIR=/app/data/seed
 ENV HIGHLAND_RUNTIME_DIR=/data/runtime

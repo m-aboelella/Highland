@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: pyproject.toml
+          cache-dependency-path: requirements-dev.lock
 
       - uses: actions/setup-node@v4
         with:
@@ -34,7 +34,8 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m venv .venv
-          .venv/bin/pip install -e '.[dev]'
+          .venv/bin/pip install -r requirements-dev.lock
+          .venv/bin/pip install --no-deps -e .
 
       - name: Install web dependencies
         run: npm ci --prefix web
@@ -50,3 +51,16 @@ jobs:
           path: var/highland/reports/
           if-no-files-found: ignore
           retention-days: 7
+
+  compose-smoke:
+    needs: hermetic-quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HIGHLAND_MODEL_BACKEND: scripted
+      COHERE_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run the clean-stack runtime gate
+        run: make compose-smoke
