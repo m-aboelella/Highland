@@ -69,6 +69,20 @@ def test_python_install_paths_use_checked_in_locks() -> None:
     assert "pip-tools==" in development_lock
 
 
+def test_production_image_declares_packaged_application_configuration() -> None:
+    dockerfile = (REPO_ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
+    required_config = {
+        "HIGHLAND_MODEL_PRICE_CONFIG": "config/model_prices.json",
+        "HIGHLAND_TOOL_POLICY_CONFIG": "config/tool_policy.json",
+        "HIGHLAND_AGENT_PROFILE_CONFIG": "config/agents/general.json",
+    }
+
+    assert "COPY config ./config" in dockerfile
+    for setting, relative_path in required_config.items():
+        assert f"ENV {setting}=/app/{relative_path}" in dockerfile
+        assert (REPO_ROOT / relative_path).is_file()
+
+
 def test_ci_runs_compose_smoke_after_hermetic_quality() -> None:
     workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(
         encoding="utf-8"

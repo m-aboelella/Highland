@@ -17,5 +17,8 @@ RUN pip install --no-cache-dir -r requirements.lock \
 
 ENV HIGHLAND_SEED_DIR=/app/data/seed
 ENV HIGHLAND_RUNTIME_DIR=/data/runtime
+ENV HIGHLAND_MODEL_PRICE_CONFIG=/app/config/model_prices.json
+ENV HIGHLAND_TOOL_POLICY_CONFIG=/app/config/tool_policy.json
+ENV HIGHLAND_AGENT_PROFILE_CONFIG=/app/config/agents/general.json
 
 CMD ["highland", "app"]

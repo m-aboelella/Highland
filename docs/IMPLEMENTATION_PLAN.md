@@ -234,6 +234,7 @@ User
 | M12 — Cross-environment CI stability | ✅ Implemented | 2/2 | Portable export assertions and task-safe MCP lifecycle |
 | M13 — Compose failure evidence | ✅ Implemented | 1/1 | Preserve actionable bootstrap diagnostics in CI |
 | M14 — Container ingestion startup | ✅ Implemented | 1/1 | Propagate connector service URLs into ingestion MCP processes |
+| M15 — Container application configuration | ✅ Implemented | 1/1 | Resolve packaged runtime configuration from explicit image paths |
 
 ---
 
@@ -2372,6 +2373,50 @@ Delivered:
 
 ---
 
+# M15 — Container application configuration
+
+**Milestone status:** ✅ Implemented
+**Milestone outcome:** Installed Highland services resolve their checked-in
+configuration from the image filesystem instead of deriving invalid paths from
+the package installation directory.
+
+## E15.1 — Declare image configuration paths
+
+**Status:** ✅ Implemented
+**Implemented in:** `Declare container application configuration paths`
+**Depends on:** M14
+
+Scope:
+
+- Configure the production image with explicit paths for the model-price,
+  tool-policy, and agent-profile files copied into `/app/config`.
+- Keep native development defaults unchanged and avoid environment-specific
+  path inference in application code.
+- Add packaging regression coverage for every required runtime configuration
+  file.
+
+Verification:
+
+```bash
+pytest tests/unit/test_container_packaging.py
+make ci
+```
+
+Suggested commit:
+
+```text
+Declare container application configuration paths
+```
+
+Delivered:
+
+- The production image explicitly points model pricing, tool policy, and agent
+  profile settings at the configuration files copied beneath `/app/config`.
+- Native development continues to use repository-relative setting defaults.
+- Packaging coverage verifies each image setting and its checked-in source file.
+
+---
+
 # Working agreement for future Codex sessions
 
 ## Session startup
@@ -2440,7 +2485,7 @@ E1.* + E2.1 -> E2.4 -> E2.5 -> E2.6
 E3.2 + model providers -> E3.3 -> E3.4 -> E3.5 -> E3.6
 M2 + M3 -> M4 -> M5
 M2 + M3 + M5 -> M6
-M3 through M6 -> M7 -> M8 -> M9 -> M10 -> M11 -> M12 -> M13 -> M14
+M3 through M6 -> M7 -> M8 -> M9 -> M10 -> M11 -> M12 -> M13 -> M14 -> M15
 ```
 
 E3.1 is intentionally required by E2.2 because index population should teach
@@ -2451,7 +2496,7 @@ behind the connector layer.
 
 Highland is complete when:
 
-- all epics through M14 are implemented or explicitly moved out of scope with a
+- all epics through M15 are implemented or explicitly moved out of scope with a
   documented reason;
 - the default suite is deterministic, offline, and non-billable;
 - the three live Cohere scenarios can be run separately with explicit opt-in;
