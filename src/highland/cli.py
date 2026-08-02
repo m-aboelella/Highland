@@ -24,6 +24,7 @@ from .models.provider import build_model_provider
 from .retrieval.ingestion import BackfillService
 from .retrieval.sources import INDEXABLE_SOURCES, MCPSourceReader
 from .retrieval.sync import IndexSynchronizer
+from .services import ApplicationServices
 from .settings import HighlandSettings
 from .storage.cost_ledger import CostLedger, UsageSummary
 from .workspace import WorkspacePaths
@@ -68,8 +69,14 @@ def build_parser() -> argparse.ArgumentParser:
     index_commands.add_parser("rebuild", help="Safely rebuild all searchable content.")
     evaluation = subparsers.add_parser("eval", help="Run Highland evaluations.")
     evaluation_commands = evaluation.add_subparsers(dest="evaluation_command", required=True)
-    evaluation_commands.add_parser(
+    retrieval = evaluation_commands.add_parser(
         "retrieval", help="Run deterministic retrieval and isolation evaluation."
+    )
+    retrieval.add_argument("--baseline", type=Path, help="Stored retrieval report to compare.")
+    retrieval.add_argument(
+        "--enforce-baseline",
+        action="store_true",
+        help="Fail when a quality metric falls below the baseline.",
     )
     scenario = evaluation_commands.add_parser(
         "scenario", help="Run one explicitly opted-in Cohere scenario evaluation."
@@ -198,21 +205,47 @@ def main() -> None:
             if not result.promoted:
                 raise SystemExit(1)
     elif args.command == "eval" and args.evaluation_command == "retrieval":
-        report = evaluate_retrieval(
-            scenarios_dir=Path(__file__).resolve().parents[2] / "data" / "scenarios",
-            seed_dir=Path(__file__).resolve().parents[2] / "data" / "seed",
-            reports_dir=settings.workspace_dir / "reports" / "retrieval",
+        if settings.model_backend.value == "cohere" and (
+            os.getenv("HIGHLAND_RUN_LIVE_TESTS") != "1" or settings.cohere_api_key is None
+        ):
+            raise SystemExit(
+                "live retrieval evaluation requires HIGHLAND_RUN_LIVE_TESTS=1 "
+                "and COHERE_API_KEY"
+            )
+        services = ApplicationServices.build(settings)
+        default_baseline = (
+            Path(__file__).resolve().parents[2]
+            / "config"
+            / "evaluation"
+            / "retrieval-baseline.json"
+        )
+        baseline = args.baseline or (default_baseline if args.enforce_baseline else None)
+        report = asyncio.run(
+            evaluate_retrieval(
+                services.discover,
+                relevance_path=Path(__file__).resolve().parents[2]
+                / "config"
+                / "evaluation"
+                / "retrieval-relevance.json",
+                index_dir=services.workspace.indexes / "search",
+                reports_dir=settings.workspace_dir / "reports" / "retrieval",
+                backend=settings.model_backend.value,
+                model_ids=services.effective_models(),
+                baseline_path=baseline,
+                enforce_baseline=args.enforce_baseline,
+            )
         )
         print(
-            f"provider={report.provider} candidate_recall={report.candidate_recall:.1%} "
-            f"top_k_recall={report.top_k_recall:.1%} "
+            f"backend={report.provenance.backend} candidate_recall={report.candidate_recall:.1%} "
+            f"precision_at_k={report.precision_at_k:.1%} "
+            f"recall_at_k={report.recall_at_k:.1%} mrr_at_k={report.mrr_at_k:.3f} "
             f"result={'PASS' if report.passed else 'FAIL'}"
         )
         for case in report.cases:
             if not case.passed:
                 print(
                     f"FAIL {case.case_id}: stage={case.failure_stage} "
-                    f"missing={case.missing_top_k_ids} leakage={case.leaked_ids}"
+                    f"missing={case.missing_top_k_ids} leakage={case.leaked_source_ids}"
                 )
         print(f"reports={settings.workspace_dir / 'reports' / 'retrieval'}")
         if not report.passed:

@@ -1,57 +1,192 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
-from highland.evaluation.retrieval import evaluate_retrieval
+import pytest
+
+from highland.discover.service import SearchRequest
+from highland.evaluation.retrieval import evaluate_retrieval, load_relevance_set
+from highland.models.scripted import DeterministicEmbeddingModel, DeterministicRerankModel
+from highland.retrieval.contracts import SourceDocument, chunk_document
+from highland.retrieval.faiss_store import EmbeddingIndex, FaissStore
+from highland.retrieval.hybrid import HybridRetriever
+from highland.retrieval.ingestion import promote_snapshot
 
 
-def _write(path: Path, value: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value), encoding="utf-8")
+class ProductionSearcher:
+    def __init__(self, retriever: HybridRetriever) -> None:
+        self.retriever = retriever
+
+    async def search(self, request: SearchRequest):  # type: ignore[no-untyped-def]
+        return await self.retriever.search(request.query, filters=request.filters.retrieval())
 
 
-def test_retrieval_reports_stage_loss_and_writes_both_formats(tmp_path: Path) -> None:
-    seed = tmp_path / "seed"
-    scenarios = tmp_path / "scenarios"
-    reports = tmp_path / "reports"
-    _write(
-        seed / "support.json",
-        {"tickets": [{"record_id": "tkt_1", "customer_id": "cus_a", "text": "latency"}]},
+def _write_relevance(path: Path, cases: list[dict[str, object]]) -> None:
+    path.write_text(json.dumps({"version": 1, "reviewed": True, "cases": cases}))
+
+
+async def _searcher(index_dir: Path) -> ProductionSearcher:
+    now = datetime(2026, 7, 29, tzinfo=UTC)
+    documents = [
+        SourceDocument(
+            source_system="relay",
+            source_id="tkt_1",
+            title="SUP-1: Production latency",
+            text="Shard memory pressure during compaction increased retrieval latency.",
+            source_type="ticket",
+            visibility="support",
+            updated_at=now,
+            source_url="http://relay/tickets/tkt_1",
+            customer_id="cus_a",
+        ),
+        SourceDocument(
+            source_system="relay",
+            source_id="foreign",
+            title="Other customer latency",
+            text="Production latency and memory pressure.",
+            source_type="ticket",
+            visibility="support",
+            updated_at=now,
+            source_url="http://relay/tickets/foreign",
+            customer_id="cus_b",
+        ),
+    ]
+    chunks = [chunk for document in documents for chunk in chunk_document(document)]
+    embeddings = DeterministicEmbeddingModel()
+    await EmbeddingIndex(embeddings).build(chunks, index_dir / "vectors")
+    promote_snapshot(
+        index_dir,
+        chunks=chunks,
+        documents=documents,
+        started=now,
+        completed=now,
+        counts={"relay": 2},
+        vector_source=index_dir / "vectors",
     )
-    _write(
-        scenarios / "one.json",
-        {
-            "id": "one",
-            "expected_claims": [{"claim": "unrelated wording", "evidence": ["tkt_1"]}],
-        },
+    # promote_snapshot replaces index_dir, so rebuild vectors in the promoted location.
+    await EmbeddingIndex(embeddings).build(chunks, index_dir / "vectors")
+    return ProductionSearcher(
+        HybridRetriever(
+            chunks,
+            vector_store=FaissStore.open(
+                index_dir / "vectors", expected_model_id=embeddings.model
+            ),
+            embedding_index=EmbeddingIndex(embeddings),
+            reranker=DeterministicRerankModel(),
+            candidate_limit=10,
+            result_limit=5,
+        )
     )
-    report = evaluate_retrieval(
-        scenarios_dir=scenarios, seed_dir=seed, reports_dir=reports, top_k=1
+
+
+@pytest.mark.asyncio
+async def test_retrieval_uses_production_results_and_writes_standard_metrics(
+    tmp_path: Path,
+) -> None:
+    relevance = tmp_path / "relevance.json"
+    _write_relevance(
+        relevance,
+        [
+            {
+                "id": "exact",
+                "kind": "exact_id",
+                "query": "SUP-1 production latency",
+                "relevant_source_ids": ["tkt_1"],
+                "filters": {"customer_id": "cus_a"},
+                "forbidden_customer_ids": ["cus_b"],
+            }
+        ],
+    )
+    index = tmp_path / "index"
+    report = await evaluate_retrieval(
+        await _searcher(index),
+        relevance_path=relevance,
+        index_dir=index,
+        reports_dir=tmp_path / "reports",
+        backend="scripted",
+        model_ids={"embedding": "deterministic-embedding", "rerank": "deterministic-rerank"},
+    )
+    assert report.passed
+    assert report.candidate_recall == 1
+    assert report.recall_at_k == 1
+    assert report.mrr_at_k == 1
+    assert report.cases[0].candidate_source_ids == ["tkt_1"]
+    assert report.cases[0].leaked_source_ids == []
+    assert report.provenance.index_fingerprint
+    assert (tmp_path / "reports" / "retrieval.json").exists()
+    assert "Precision@k" in (tmp_path / "reports" / "retrieval.md").read_text()
+
+
+@pytest.mark.asyncio
+async def test_baseline_enforcement_fails_metric_regression(tmp_path: Path) -> None:
+    index = tmp_path / "index"
+    searcher = await _searcher(index)
+    good = tmp_path / "good.json"
+    _write_relevance(
+        good,
+        [
+            {
+                "id": "good",
+                "kind": "exact_id",
+                "query": "SUP-1",
+                "relevant_source_ids": ["tkt_1"],
+                "filters": {"customer_id": "cus_a"},
+            }
+        ],
+    )
+    baseline_report = await evaluate_retrieval(
+        searcher,
+        relevance_path=good,
+        index_dir=index,
+        reports_dir=tmp_path / "baseline-report",
+        backend="scripted",
+        model_ids={"embedding": "deterministic-embedding", "rerank": "deterministic-rerank"},
+    )
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "backend": "scripted",
+                "relevance_set_version": 1,
+                "candidate_recall": baseline_report.candidate_recall,
+                "precision_at_k": baseline_report.precision_at_k,
+                "recall_at_k": baseline_report.recall_at_k,
+                "mrr_at_k": baseline_report.mrr_at_k,
+            }
+        )
+    )
+    regressed = tmp_path / "regressed.json"
+    _write_relevance(
+        regressed,
+        [
+            {
+                "id": "miss",
+                "kind": "paraphrase",
+                "query": "SUP-1",
+                "relevant_source_ids": ["missing"],
+            }
+        ],
+    )
+    report = await evaluate_retrieval(
+        searcher,
+        relevance_path=regressed,
+        index_dir=index,
+        reports_dir=tmp_path / "regressed-report",
+        backend="scripted",
+        model_ids={"embedding": "deterministic-embedding", "rerank": "deterministic-rerank"},
+        baseline_path=baseline,
+        enforce_baseline=True,
     )
     assert not report.passed
-    assert report.cases[0].failure_stage == "candidate"
-    assert report.cases[0].missing_candidate_ids == ["tkt_1"]
-    assert (reports / "retrieval.json").exists()
-    assert "Missing evidence" in (reports / "retrieval.md").read_text()
+    assert report.baseline_delta is not None
+    assert report.baseline_delta.recall_at_k < 0
 
 
-def test_customer_isolation_is_a_hard_failure(tmp_path: Path) -> None:
-    seed = tmp_path / "seed"
-    scenarios = tmp_path / "scenarios"
-    _write(
-        seed / "records.json",
-        {
-            "items": [
-                {"record_id": "safe", "customer_id": "cus_a", "text": "deployment health"},
-                {"record_id": "foreign", "customer_id": "cus_b", "text": "deployment health"},
-            ]
-        },
-    )
-    _write(scenarios / "none.json", {"id": "none"})
-    report = evaluate_retrieval(
-        scenarios_dir=scenarios, seed_dir=seed, reports_dir=tmp_path / "reports"
-    )
-    isolation = next(case for case in report.cases if case.kind == "customer_isolation")
-    assert isolation.leaked_ids == []
-    assert isolation.passed
+def test_relevance_set_must_be_reviewed(tmp_path: Path) -> None:
+    path = tmp_path / "relevance.json"
+    path.write_text('{"version":1,"reviewed":false,"cases":[]}')
+    with pytest.raises(ValueError, match="not marked reviewed"):
+        load_relevance_set(path)

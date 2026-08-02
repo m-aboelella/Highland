@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "reviewed": true,
+  "cases": [
+    {
+      "id": "exact-support-key",
+      "kind": "exact_id",
+      "query": "SUP-1042 production search latency",
+      "relevant_source_ids": ["tkt_1042"],
+      "filters": {"customer_id": "cus_northwind"}
+    },
+    {
+      "id": "exact-incident-key",
+      "kind": "exact_id",
+      "query": "INC-208 compaction incident",
+      "relevant_source_ids": ["inc_208"],
+      "filters": {"customer_id": "cus_northwind"}
+    },
+    {
+      "id": "paraphrase-memory-contention",
+      "kind": "paraphrase",
+      "query": "memory pressure during background index maintenance increased response times",
+      "relevant_source_ids": ["inc_208", "tkt_1042"],
+      "filters": {"customer_id": "cus_northwind"}
+    },
+    {
+      "id": "paraphrase-customer-safe-language",
+      "kind": "paraphrase",
+      "query": "how should we explain a suspected cause to a customer without overstating certainty",
+      "relevant_source_ids": ["doc_latency_runbook", "msg_7002"],
+      "filters": {"customer_id": "cus_northwind"}
+    },
+    {
+      "id": "filter-support-only",
+      "kind": "filter",
+      "query": "Northwind production retrieval latency",
+      "relevant_source_ids": ["tkt_1042"],
+      "filters": {"customer_id": "cus_northwind", "source_types": ["ticket"]}
+    },
+    {
+      "id": "filter-project-only",
+      "kind": "filter",
+      "query": "Northwind capacity review commitment",
+      "relevant_source_ids": ["iss_91"],
+      "filters": {"customer_id": "cus_northwind", "source_types": ["issue"]}
+    },
+    {
+      "id": "stale-historical-ticket",
+      "kind": "stale_record",
+      "query": "bulk ingestion job missed PDF documents",
+      "relevant_source_ids": ["tkt_1018"],
+      "filters": {
+        "customer_id": "cus_northwind",
+        "source_types": ["ticket"],
+        "updated_before": "2026-07-01T00:00:00Z"
+      }
+    },
+    {
+      "id": "runbook-triage",
+      "kind": "paraphrase",
+      "query": "investigate retrieval tail latency before scaling capacity",
+      "relevant_source_ids": ["doc_latency_runbook"],
+      "filters": {"source_types": ["runbook"]}
+    },
+    {
+      "id": "release-compaction-limitation",
+      "kind": "paraphrase",
+      "query": "first compaction after upgrade temporary memory increase",
+      "relevant_source_ids": ["doc_4182_release"],
+      "filters": {"source_types": ["release-notes"]}
+    },
+    {
+      "id": "customer-isolation-northwind",
+      "kind": "customer_isolation",
+      "query": "SUP-1042 INC-208 elevated retrieval latency during index compaction",
+      "relevant_source_ids": ["tkt_1042", "inc_208"],
+      "filters": {"customer_id": "cus_northwind"},
+      "forbidden_customer_ids": ["cus_alpine", "cus_lumon"]
+    },
+    {
+      "id": "customer-isolation-alpine",
+      "kind": "customer_isolation",
+      "query": "regional expansion and current search health",
+      "relevant_source_ids": ["msg_7010"],
+      "filters": {"customer_id": "cus_alpine"},
+      "forbidden_customer_ids": ["cus_northwind", "cus_lumon"]
+    },
+    {
+      "id": "no-answer-impossible-source-filter",
+      "kind": "no_answer",
+      "query": "information which is not present in the corpus",
+      "relevant_source_ids": [],
+      "filters": {"source_types": ["not_a_real_source_type"]},
+      "expect_no_results": true
+    }
+  ]
+}

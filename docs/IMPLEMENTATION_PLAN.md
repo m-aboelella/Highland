@@ -229,7 +229,7 @@ User
 | M7 — Evaluation and reliability | ✅ Implemented | 5/5 | Deterministic and live-model evidence |
 | M8 — Self-hosted learning experience | ✅ Implemented | 5/5 | One-key stack and teaching path |
 | M9 — Simpler code structure | ✅ Implemented | 2/2 | Clear composition, configuration, and mock ownership |
-| M10 — Faithful evaluation | ⬜ Not started | 0/2 | Production-path retrieval and agent evaluation |
+| M10 — Faithful evaluation | 🟨 Partial | 1/2 | Production-path retrieval and agent evaluation |
 | M11 — Reproducible learning environment | ⬜ Not started | 0/2 | Locked setup, smoke tests, and experiment guidance |
 
 ---
@@ -2022,14 +2022,14 @@ Organize mock systems by source boundary
 
 # M10 — Faithful evaluation
 
-**Milestone status:** ⬜ Not started
+**Milestone status:** 🟨 Partial
 **Milestone outcome:** Algorithm and model changes are measured through the
 same retrieval, agent, MCP, policy, and workflow paths used by the application.
 
 ## E10.1 — Benchmark production retrieval
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** M9
 
 Scope:
@@ -2058,6 +2058,18 @@ Suggested commit:
 ```text
 Benchmark the production retrieval pipeline
 ```
+
+Implementation notes:
+
+- Retrieval evaluation now invokes `DiscoverService.search`, which constructs
+  and runs the production `HybridRetriever`; the former raw-seed token ranker
+  has been removed.
+- A reviewed relevance set grades canonical source IDs across exact IDs,
+  paraphrases, filters, historical records, no-answer behavior, and customer
+  isolation.
+- Reports include candidate recall, precision/recall at k, MRR, stage loss,
+  latency, leakage, effective models, SDK version, and corpus/index/config
+  fingerprints. A committed scripted baseline can be compared or enforced.
 
 ## E10.2 — Evaluate production orchestration
 

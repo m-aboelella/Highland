@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "backend": "scripted",
+  "relevance_set_version": 1,
+  "candidate_recall": 1.0,
+  "precision_at_k": 0.5395833333333333,
+  "recall_at_k": 1.0,
+  "mrr_at_k": 0.8125
+}
