@@ -136,6 +136,8 @@ class DiscoverService:
                 ],
                 "diagnostics": [item.model_dump(mode="json") for item in retrieval.diagnostics],
                 "timings": retrieval.timings.model_dump(mode="json"),
+                "rerank_usage": retrieval.rerank_usage.model_dump(mode="json"),
+                "rerank_model": retrieval.rerank_model,
                 "execution": self.trace_context,
             },
         )

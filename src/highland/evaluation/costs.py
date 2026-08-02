@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from highland.models.contracts import ChatResponse
+from highland.models.contracts import ChatResponse, Usage
 from highland.models.pricing import PriceCatalog
 
 
@@ -109,6 +109,32 @@ class EvaluationCostTracker:
                     response.metadata.model, operation, response.usage
                 ),
                 latency_ms=response.metadata.latency_ms,
+            )
+        )
+
+    def record_usage(
+        self,
+        usage: Usage,
+        *,
+        model: str,
+        scenario_id: str,
+        run_id: str,
+        node: str,
+        latency_ms: float,
+        operation: str = "chat",
+    ) -> None:
+        """Record aggregate usage from a production runtime rather than a raw SDK call."""
+        self.calls.append(
+            EvaluationCallCost(
+                scenario_id=scenario_id,
+                run_id=run_id,
+                node=node,
+                model=model,
+                input_tokens=usage.input_tokens or 0,
+                output_tokens=usage.output_tokens or 0,
+                rerank_units=usage.search_units or 0,
+                estimated_cost_usd=self.prices.estimate(model, operation, usage),
+                latency_ms=latency_ms,
             )
         )
 

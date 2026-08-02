@@ -36,7 +36,6 @@ from .settings import HighlandSettings
 from .workflows import (
     PlannerRecord,
     WorkflowDefinition,
-    WorkflowExecutor,
     WorkflowPlanner,
     WorkflowPlanningError,
 )
@@ -250,12 +249,7 @@ def register_api_routes(app: FastAPI, services: ApplicationServices) -> None:
             request_timeout_seconds=configured.connector_timeout_seconds,
         ) as gateway:
             registry = ToolRegistry.from_file(gateway, configured.tool_policy_config)
-            run = await WorkflowExecutor(
-                model=provider.chat,
-                tools=registry,
-                repository=workflow_runs,
-                approvals=approvals,
-            ).run(
+            run = await services.workflow_executor(registry).run(
                 definition,
                 run_id=run_id,
                 workflow_version=version,

@@ -83,10 +83,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     scenario.add_argument("scenario_id", help="Scenario filename without .json or manifest ID.")
     scenario.add_argument("--baseline", type=Path, help="Stored cost report to compare.")
+    scenario.add_argument("--repeat", type=int, default=1, help="Number of independent runs.")
     all_scenarios = evaluation_commands.add_parser(
         "all", help="Run all explicitly opted-in Cohere scenario evaluations."
     )
     all_scenarios.add_argument("--baseline", type=Path, help="Stored cost report to compare.")
+    all_scenarios.add_argument("--repeat", type=int, default=1, help="Runs per scenario.")
     return parser
 
 
@@ -276,17 +278,20 @@ def main() -> None:
             warning_budget_usd=settings.evaluation_warning_budget_usd,
             hard_budget_usd=settings.evaluation_hard_budget_usd,
         )
+        services = ApplicationServices.build(settings)
         evaluator = LiveScenarioEvaluator(
-            build_model_provider(settings).chat,
+            services,
             reports_dir=settings.workspace_dir / "reports" / "scenarios",
-            seed_dir=Path(__file__).resolve().parents[2] / "data" / "seed",
             costs=costs,
         )
-        grades = [asyncio.run(evaluator.evaluate(path)) for path in paths]
-        for grade in grades:
+        evaluations = [
+            asyncio.run(evaluator.evaluate(path, repeat=args.repeat)) for path in paths
+        ]
+        for evaluation in evaluations:
             print(
-                f"model-backed scenario={grade.scenario_id} "
-                f"result={'PASS' if grade.passed else 'FAIL'}"
+                f"model-backed scenario={evaluation.scenario_id} "
+                f"repeat={evaluation.repeat} pass_rate={evaluation.pass_rate:.1%} "
+                f"result={'PASS' if evaluation.passed else 'FAIL'}"
             )
         cost_report = costs.write(
             settings.workspace_dir / "reports" / "scenarios" / "cost-report.json",
@@ -296,7 +301,7 @@ def main() -> None:
             f"evaluation_cost=${cost_report.known_cost_usd:.6f} "
             f"unknown_price_calls={cost_report.unknown_price_calls}"
         )
-        if not all(grade.passed for grade in grades):
+        if not all(evaluation.passed for evaluation in evaluations):
             raise SystemExit(1)
     else:
         raise AssertionError(f"Unhandled command: {args.command}")

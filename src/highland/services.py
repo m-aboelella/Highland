@@ -12,8 +12,15 @@ from .runtime.agent import AgentProfile
 from .runtime.approvals import ApprovalStore
 from .runtime.cancellation import RunCancellationStore
 from .runtime.events import RunEventStore
+from .runtime.policy import ToolRegistry
 from .settings import HighlandSettings
-from .workflows import WorkflowRepository, WorkflowRunRepository
+from .workflows import (
+    WeeklyCustomerHealthRunner,
+    WeeklyHealthRunRepository,
+    WorkflowExecutor,
+    WorkflowRepository,
+    WorkflowRunRepository,
+)
 from .workflows.schedules import WorkflowScheduleRepository
 from .workspace import WorkspacePaths
 
@@ -126,3 +133,22 @@ class ApplicationServices:
 
     def effective_limits(self) -> dict[str, dict[str, int | float]]:
         return _limits(self.settings, self.profile)
+
+    def workflow_executor(self, tools: ToolRegistry) -> WorkflowExecutor:
+        """Build the same workflow runtime used by HTTP and evaluation entrypoints."""
+        return WorkflowExecutor(
+            model=self.provider.chat,
+            tools=tools,
+            repository=self.workflow_runs,
+            approvals=self.approvals,
+        )
+
+    def weekly_health_runner(self, tools: ToolRegistry) -> WeeklyCustomerHealthRunner:
+        """Build the canonical weekly-health workflow with production services."""
+        return WeeklyCustomerHealthRunner(
+            model=self.provider.chat,
+            tools=tools,
+            artifacts=self.artifacts,
+            runs=WeeklyHealthRunRepository(self.workspace.runs / "weekly-health"),
+            events=self.run_events,
+        )

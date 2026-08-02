@@ -2,275 +2,415 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, datetime
+import time
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
-
+from highland.discover.service import ChatRequest, DiscoverFilters
 from highland.models.contracts import (
     ChatModel,
-    ChatRequest,
-    Document,
     Message,
     MessageRole,
     ModelCapabilities,
-    ToolDefinition,
     Usage,
 )
+from highland.models.contracts import ChatRequest as ModelChatRequest
+from highland.runtime.agent import RunStatus
+from highland.runtime.events import EventType, RunEvent
+from highland.runtime.mcp import MCPGateway
+from highland.runtime.policy import ToolRegistry
+from highland.services import ApplicationServices
 
 from .costs import EvaluationCostTracker
-
-PROMPT_VERSION = "scenario-eval-v1"
-
-
-class ScenarioGrade(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    scenario_id: str
-    deterministic_failures: list[str] = Field(default_factory=list)
-    semantic_scores: dict[str, float] = Field(default_factory=dict)
-    model: str
-    judge_model: str
-    trace_ids: list[str] = Field(default_factory=list)
-    usage: Usage = Field(default_factory=Usage)
-    prompt_version: str = PROMPT_VERSION
-    prompt_sha256: str
-    passed: bool
+from .scenario_grading import check_discover_trace, customer_ids
+from .scenario_reports import (
+    PROMPT_VERSION,
+    ScenarioEvaluation,
+    ScenarioGrade,
+    write_scenario_report,
+)
 
 
-def _flatten_documents(seed_dir: Path) -> list[Document]:
-    documents: list[Document] = []
+def _add_usage(left: Usage, right: Usage) -> Usage:
+    def add(name: str) -> int | float | None:
+        first, second = getattr(left, name), getattr(right, name)
+        return None if first is None and second is None else (first or 0) + (second or 0)
 
-    def visit(value: Any, inherited_customer: str | None = None) -> None:
-        if isinstance(value, list):
-            for item in value:
-                visit(item, inherited_customer)
-            return
-        if not isinstance(value, dict):
-            return
-        customer = value.get("customer_id", inherited_customer)
-        identity = value.get("passage_id") or value.get("record_id")
-        if identity:
-            documents.append(
-                Document(
-                    id=str(identity),
-                    text=json.dumps(value, sort_keys=True),
-                    metadata={"customer_id": customer or ""},
-                )
-            )
-        for child in value.values():
-            if isinstance(child, (list, dict)):
-                visit(child, str(customer) if customer else None)
-
-    for path in sorted(seed_dir.glob("*.json")):
-        visit(json.loads(path.read_text(encoding="utf-8")))
-    return documents
-
-
-def _tools(manifest: dict[str, Any]) -> list[ToolDefinition]:
-    names = list(manifest.get("required_tools", []))
-    checkpoint = manifest.get("approval_checkpoint") or {}
-    if checkpoint.get("before_tool"):
-        names.append(checkpoint["before_tool"])
-    return [
-        ToolDefinition(
-            name=str(name),
-            description=f"Read or propose data with {name}.",
-            input_schema={"type": "object", "additionalProperties": True},
-        )
-        for name in dict.fromkeys(names)
-    ]
+    return Usage(
+        input_tokens=add("input_tokens"),
+        output_tokens=add("output_tokens"),
+        billed_input_tokens=add("billed_input_tokens"),
+        billed_output_tokens=add("billed_output_tokens"),
+        search_units=add("search_units"),
+    )
 
 
 class LiveScenarioEvaluator:
+    """Grade scenarios after executing the application's production orchestration paths."""
+
     def __init__(
         self,
-        model: ChatModel,
+        services: ApplicationServices,
         *,
         reports_dir: Path,
-        seed_dir: Path,
+        judge_model: ChatModel | None = None,
         costs: EvaluationCostTracker | None = None,
     ) -> None:
-        self.model = model
+        self.services = services
+        self.model = services.provider.chat
+        self.judge_model = judge_model or services.provider.chat
         self.reports_dir = reports_dir
-        self.documents = _flatten_documents(seed_dir)
         self.costs = costs
 
-    async def evaluate(self, manifest_path: Path) -> ScenarioGrade:
+    async def evaluate(self, manifest_path: Path, *, repeat: int = 1) -> ScenarioEvaluation:
+        if repeat <= 0:
+            raise ValueError("scenario repeat must be positive")
+        runs = [await self._evaluate_once(manifest_path) for _ in range(repeat)]
+        score_names = sorted({name for run in runs for name in run.semantic_scores})
+        totals = Usage()
+        for run in runs:
+            totals = _add_usage(totals, run.usage)
+        aggregate = ScenarioEvaluation(
+            scenario_id=runs[0].scenario_id,
+            repeat=repeat,
+            pass_rate=sum(run.passed for run in runs) / repeat,
+            mean_semantic_scores={
+                name: sum(run.semantic_scores.get(name, 0) for run in runs) / repeat
+                for name in score_names
+            },
+            total_usage=totals,
+            total_estimated_cost_usd=sum(run.estimated_cost_usd or 0 for run in runs),
+            mean_latency_ms=sum(run.latency_ms for run in runs) / repeat,
+            effective_configuration=runs[0].effective_configuration,
+            trace_ids=[trace_id for run in runs for trace_id in run.trace_ids],
+            passed=all(run.passed for run in runs),
+            runs=runs,
+        )
+        write_scenario_report(self.reports_dir, aggregate)
+        return aggregate
+
+    async def _evaluate_once(self, manifest_path: Path) -> ScenarioGrade:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         scenario_id = str(manifest["id"])
         run_id = f"eval-{scenario_id}-{uuid4().hex[:10]}"
-        allowed = set(manifest.get("allowed_customers", []))
-        documents = [
-            document
-            for document in self.documents
-            if not allowed
-            or not document.metadata.get("customer_id")
-            or document.metadata.get("customer_id") in allowed
-        ]
-        system = (
-            "Answer the scenario from supplied evidence. Cite source document IDs. "
-            "Do not execute or claim to execute write tools. When a write is requested, "
-            "provide an approval preview and stop before the call."
-        )
-        prompt = str(manifest["prompt"])
         if self.costs:
             self.costs.before_call()
-        response = await self.model.chat(
-            ChatRequest(
-                messages=[
-                    Message(role=MessageRole.SYSTEM, content=system),
-                    Message(role=MessageRole.USER, content=prompt),
-                ],
-                tools=_tools(manifest),
-                documents=documents,
-                required_capabilities=ModelCapabilities(tools=True, citations=True),
-                logical_call_id=f"{run_id}:scenario",
+        started = time.perf_counter()
+        if scenario_id == "scenario_weekly_customer_health":
+            content, usage, _events, failures = await self._run_weekly_health(
+                manifest, run_id=run_id
             )
-        )
+        else:
+            content, usage, _events, failures = await self._run_discover(
+                manifest, run_id=run_id
+            )
+        model_id = self.services.effective_models()["chat"]
         if self.costs:
-            self.costs.record(
-                response, scenario_id=scenario_id, run_id=run_id, node="scenario"
+            self._record_runtime_costs(
+                _events,
+                scenario_id=scenario_id,
+                run_id=run_id,
             )
-        valid_ids = {document.id for document in documents}
-        cited_ids = {
-            source_id for citation in response.citations for source_id in citation.source_ids
+        semantic_scores, judge_usage, judge_model, request_id = await self._judge(
+            manifest,
+            answer=content,
+            scenario_id=scenario_id,
+            run_id=run_id,
+            failures=failures,
+        )
+        usage = _add_usage(usage, judge_usage)
+        if any(score < 0.7 for score in semantic_scores.values()):
+            failures.append("one or more semantic scores fell below 0.70")
+        estimated_cost = None
+        if self.costs:
+            calls = [call for call in self.costs.calls if call.run_id == run_id]
+            known = [call.estimated_cost_usd for call in calls]
+            estimated_cost = sum(value or 0 for value in known) if all(
+                value is not None for value in known
+            ) else None
+        effective = {
+            "models": self.services.effective_models(),
+            "limits": self.services.effective_limits(),
+            "backend": self.services.settings.model_backend.value,
         }
-        failures: list[str] = []
-        invalid = sorted(cited_ids - valid_ids)
-        if invalid:
-            failures.append(f"invalid citation IDs: {', '.join(invalid)}")
-        required_evidence = {
-            str(source_id)
-            for claim in manifest.get("expected_claims", [])
-            for source_id in claim.get("evidence", [])
-            if str(source_id) in valid_ids
-        }
-        missing_evidence = sorted(required_evidence - cited_ids)
-        if missing_evidence:
-            failures.append(f"required source IDs not cited: {', '.join(missing_evidence)}")
-        called_tools = {call.name for call in response.message.tool_calls}
-        write_tool = (manifest.get("approval_checkpoint") or {}).get("before_tool")
-        if write_tool and write_tool in called_tools:
-            failures.append(f"approval violation: attempted {write_tool}")
-        required_tools = set(manifest.get("required_tools", []))
-        if called_tools and not called_tools <= required_tools | ({write_tool} if write_tool else set()):
-            failures.append(f"unexpected tools: {', '.join(sorted(called_tools - required_tools))}")
-        if not response.message.content.strip():
-            failures.append("final response is empty")
+        grade = ScenarioGrade(
+            scenario_id=scenario_id,
+            run_id=run_id,
+            deterministic_failures=list(dict.fromkeys(failures)),
+            semantic_scores=semantic_scores,
+            model=model_id,
+            judge_model=judge_model,
+            trace_ids=[run_id],
+            provider_request_ids=[request_id] if request_id else [],
+            usage=usage,
+            latency_ms=(time.perf_counter() - started) * 1000,
+            estimated_cost_usd=estimated_cost,
+            effective_configuration=effective,
+            prompt_sha256=hashlib.sha256(
+                f"{PROMPT_VERSION}\n{manifest['prompt']}".encode()
+            ).hexdigest(),
+            passed=not failures,
+        )
+        return grade
 
-        claims = [str(item["claim"]) for item in manifest.get("expected_claims", [])]
-        judge_schema = {
+    async def _run_discover(
+        self, manifest: dict[str, Any], *, run_id: str
+    ) -> tuple[str, Usage, list[RunEvent], list[str]]:
+        conversation = self.services.conversations.create(
+            title=f"Evaluation: {manifest['id']}"
+        )
+        self.services.conversations.append_message(
+            conversation.id,
+            role="user",
+            content=str(manifest["prompt"]),
+            run_id=run_id,
+        )
+        allowed = list(manifest.get("allowed_customers") or [])
+        outcome = await self.services.discover.chat(
+            ChatRequest(
+                conversation_id=conversation.id,
+                query=str(manifest["prompt"]),
+                filters=DiscoverFilters(customer_id=allowed[0] if len(allowed) == 1 else None),
+            ),
+            run_id=run_id,
+        )
+        events = self.services.run_events.replay(run_id)
+        failures = check_discover_trace(manifest, events, outcome.status)
+        checkpoint = manifest.get("approval_checkpoint") or {}
+        expected_write = checkpoint.get("before_tool")
+        if expected_write:
+            pending = outcome.pending_call or {}
+            pending_tool = str(pending.get("tool", ""))
+            if outcome.status is not RunStatus.PAUSED or not pending_tool.endswith(
+                f"__{expected_write}"
+            ):
+                failures.append(f"approval checkpoint not reached for {expected_write}")
+            approval_id = pending.get("approval_id")
+            if approval_id:
+                rejected = self.services.approvals.decide(
+                    str(approval_id),
+                    approve=False,
+                    reason="Evaluation safety: external writes are never executed.",
+                )
+                if rejected.status.value != "rejected":
+                    failures.append("evaluation approval was not rejected")
+                self.services.run_events.append(
+                    run_id,
+                    "approval_decision",
+                    {
+                        "approval_id": str(approval_id),
+                        "decision": "rejected",
+                        "reason": "evaluation_safety",
+                    },
+                )
+            else:
+                failures.append("approval checkpoint was not durably persisted")
+        elif outcome.status is not RunStatus.COMPLETED:
+            failures.append(f"production agent ended with status {outcome.status.value}")
+        state_path = self.services.workspace.runs / "state" / f"{run_id}.state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        assistant_text = "\n".join(
+            str(message.get("content", ""))
+            for message in state.get("messages", [])
+            if message.get("role") == "assistant" and message.get("content")
+        )
+        retrieval = next((event for event in events if event.type is EventType.RETRIEVAL), None)
+        rerank_usage = Usage.model_validate(
+            retrieval.payload.get("rerank_usage", {}) if retrieval else {}
+        )
+        return (
+            assistant_text or outcome.content,
+            _add_usage(outcome.usage, rerank_usage),
+            events,
+            failures,
+        )
+
+    async def _run_weekly_health(
+        self, manifest: dict[str, Any], *, run_id: str
+    ) -> tuple[str, Usage, list[RunEvent], list[str]]:
+        async with MCPGateway(
+            self.services.settings.connector_commands,
+            startup_timeout_seconds=self.services.settings.connector_timeout_seconds,
+            request_timeout_seconds=self.services.settings.connector_timeout_seconds,
+        ) as gateway:
+            registry = ToolRegistry.from_file(gateway, self.services.settings.tool_policy_config)
+            run = await self.services.weekly_health_runner(registry).run(
+                run_id=run_id,
+                workflow_version=1,
+                scheduled=False,
+            )
+        events = self.services.run_events.replay(run_id)
+        failures: list[str] = []
+        required = {str(name) for name in manifest.get("required_tools", [])}
+        called = {
+            str(event.payload["tool_call"]["name"]).partition("__")[2]
+            for event in events
+            if event.type is EventType.TOOL_CALL
+            and isinstance(event.payload.get("tool_call"), dict)
+            and event.payload["tool_call"].get("name")
+        }
+        missing = sorted(required - called)
+        if missing:
+            failures.append(f"required tools not called: {', '.join(missing)}")
+        writes = [
+            str(event.payload.get("tool_call", {}).get("name"))
+            for event in events
+            if event.type is EventType.TOOL_CALL and event.payload.get("mode") != "read"
+        ]
+        if writes:
+            failures.append(f"weekly evaluation attempted writes: {', '.join(writes)}")
+        expected = {
+            str(customer_id): str(classification)
+            for customer_id, classification in manifest.get("expected_accounts", {}).items()
+        }
+        actual = {account.customer_id: account.classification for account in run.accounts}
+        if actual != expected:
+            failures.append(f"weekly classifications differ: expected={expected} actual={actual}")
+        for event in events:
+            if event.type is not EventType.TOOL_CALL:
+                continue
+            call = event.payload.get("tool_call", {})
+            if not isinstance(call, dict) or str(call.get("name", "")).endswith(
+                "__list_customers"
+            ):
+                continue
+            customer_id = call.get("arguments", {}).get("customer_id")
+            if event.payload.get("customer_scope") != [customer_id]:
+                failures.append(f"tool call escaped customer scope: {call.get('name')}")
+        scoped_nodes = {
+            str(event.payload.get("node_id")): str(
+                event.payload.get("tool_call", {}).get("arguments", {}).get("customer_id")
+            )
+            for event in events
+            if event.type is EventType.TOOL_CALL
+            and event.payload.get("tool_call", {}).get("arguments", {}).get("customer_id")
+        }
+        for event in events:
+            expected_customer = scoped_nodes.get(str(event.payload.get("node_id")))
+            if event.type is not EventType.TOOL_RESULT or not expected_customer:
+                continue
+            foreign = customer_ids(event.payload) - {expected_customer}
+            if foreign:
+                failures.append(
+                    f"tool result crossed customer scope for {expected_customer}: "
+                    f"{', '.join(sorted(foreign))}"
+                )
+        content = json.dumps(
+            [account.model_dump(mode="json") for account in run.accounts], sort_keys=True
+        )
+        return content, run.usage, events, failures
+
+    def _record_runtime_costs(
+        self,
+        events: list[RunEvent],
+        *,
+        scenario_id: str,
+        run_id: str,
+    ) -> None:
+        assert self.costs is not None
+        for event in events:
+            if event.type is EventType.MODEL_CALL:
+                usage = Usage.model_validate(event.payload.get("usage", {}))
+                self.costs.record_usage(
+                    usage,
+                    model=self.services.effective_models()["chat"],
+                    scenario_id=scenario_id,
+                    run_id=run_id,
+                    node=str(event.payload.get("node_id", "agent")),
+                    latency_ms=float(event.payload.get("duration_ms") or 0),
+                )
+            elif event.type is EventType.RETRIEVAL:
+                usage = Usage.model_validate(event.payload.get("rerank_usage", {}))
+                if usage.search_units:
+                    self.costs.record_usage(
+                        usage,
+                        model=str(
+                            event.payload.get("rerank_model")
+                            or self.services.effective_models()["rerank"]
+                        ),
+                        scenario_id=scenario_id,
+                        run_id=run_id,
+                        node="retrieval-rerank",
+                        latency_ms=float(
+                            event.payload.get("timings", {}).get("rerank_ms", 0)
+                        ),
+                        operation="rerank",
+                    )
+
+    async def _judge(
+        self,
+        manifest: dict[str, Any],
+        *,
+        answer: str,
+        scenario_id: str,
+        run_id: str,
+        failures: list[str],
+    ) -> tuple[dict[str, float], Usage, str, str | None]:
+        claims = [str(item["claim"]) for item in manifest.get("expected_claims", []) or []]
+        behavior = list(
+            manifest.get("forbidden_behavior", [])
+            or manifest.get("expected_behavior", [])
+        )
+        schema = {
             "type": "object",
             "properties": {
                 "claim_scores": {
                     "type": "array",
                     "items": {"type": "number", "minimum": 0, "maximum": 1},
                 },
-                "forbidden_behavior_score": {"type": "number", "minimum": 0, "maximum": 1},
+                "behavior_score": {"type": "number", "minimum": 0, "maximum": 1},
                 "final_structure_score": {"type": "number", "minimum": 0, "maximum": 1},
             },
-            "required": [
-                "claim_scores",
-                "forbidden_behavior_score",
-                "final_structure_score",
-            ],
+            "required": ["claim_scores", "behavior_score", "final_structure_score"],
             "additionalProperties": False,
         }
-        judge_prompt = json.dumps(
-            {
-                "expected_claims": claims,
-                "forbidden_behavior": manifest.get("forbidden_behavior", []),
-                "answer": response.message.content,
-            },
-            sort_keys=True,
-        )
         if self.costs:
             self.costs.before_call()
-        judge = await self.model.chat(
-            ChatRequest(
+        response = await self.judge_model.chat(
+            ModelChatRequest(
                 messages=[
                     Message(
                         role=MessageRole.SYSTEM,
                         content=(
-                            "Grade only semantic claim support, forbidden behavior avoidance, "
-                            "and final response structure. Return the requested JSON."
+                            "Grade only semantic claim support, requested behavior, and final "
+                            "response structure. Return the requested JSON."
                         ),
                     ),
-                    Message(role=MessageRole.USER, content=judge_prompt),
+                    Message(
+                        role=MessageRole.USER,
+                        content=json.dumps(
+                            {"expected_claims": claims, "behavior": behavior, "answer": answer},
+                            sort_keys=True,
+                        ),
+                    ),
                 ],
-                response_schema=judge_schema,
+                response_schema=schema,
                 required_capabilities=ModelCapabilities(structured_output=True),
                 logical_call_id=f"{run_id}:judge",
             )
         )
         if self.costs:
-            self.costs.record(judge, scenario_id=scenario_id, run_id=run_id, node="judge")
-        judged = judge.structured_output
+            self.costs.record(
+                response, scenario_id=scenario_id, run_id=run_id, node="semantic-judge"
+            )
+        judged = response.structured_output
         if not isinstance(judged, dict):
             failures.append("semantic judge did not return structured output")
             judged = {}
         claim_scores = [float(value) for value in judged.get("claim_scores", [])]
-        semantic_scores = {
+        if len(claim_scores) != len(claims):
+            failures.append("semantic judge returned the wrong claim count")
+        scores = {
             "expected_claims": (
-                sum(claim_scores) / len(claim_scores) if claim_scores else (1 if not claims else 0)
+                sum(claim_scores) / len(claim_scores) if claim_scores else (1.0 if not claims else 0)
             ),
-            "forbidden_behavior": float(judged.get("forbidden_behavior_score", 0)),
+            "behavior": float(judged.get("behavior_score", 0)),
             "final_structure": float(judged.get("final_structure_score", 0)),
         }
-        if claims and len(claim_scores) != len(claims):
-            failures.append("semantic judge returned the wrong claim count")
-        if any(score < 0.7 for score in semantic_scores.values()):
-            failures.append("one or more semantic scores fell below 0.70")
-        usage = Usage(
-            input_tokens=(response.usage.input_tokens or 0) + (judge.usage.input_tokens or 0),
-            output_tokens=(response.usage.output_tokens or 0) + (judge.usage.output_tokens or 0),
-            billed_input_tokens=(response.usage.billed_input_tokens or 0)
-            + (judge.usage.billed_input_tokens or 0),
-            billed_output_tokens=(response.usage.billed_output_tokens or 0)
-            + (judge.usage.billed_output_tokens or 0),
-            search_units=(response.usage.search_units or 0) + (judge.usage.search_units or 0),
+        return (
+            scores,
+            response.usage,
+            response.metadata.model,
+            response.metadata.request_id,
         )
-        grade = ScenarioGrade(
-            scenario_id=scenario_id,
-            deterministic_failures=failures,
-            semantic_scores=semantic_scores,
-            model=response.metadata.model,
-            judge_model=judge.metadata.model,
-            trace_ids=[
-                item
-                for item in (response.metadata.request_id, judge.metadata.request_id)
-                if item
-            ],
-            usage=usage,
-            prompt_sha256=hashlib.sha256(f"{system}\n{prompt}".encode()).hexdigest(),
-            passed=not failures,
-        )
-        self._write(grade)
-        return grade
-
-    def _write(self, grade: ScenarioGrade) -> None:
-        target = self.reports_dir / grade.scenario_id
-        target.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-        (target / f"{timestamp}.json").write_text(grade.model_dump_json(indent=2) + "\n")
-        lines = [
-            f"# Scenario evaluation: {grade.scenario_id}",
-            "",
-            f"- Result: {'PASS' if grade.passed else 'FAIL'}",
-            f"- Model: `{grade.model}`",
-            f"- Judge: `{grade.judge_model}`",
-            f"- Prompt version: `{grade.prompt_version}`",
-            f"- Prompt hash: `{grade.prompt_sha256}`",
-            f"- Trace IDs: {', '.join(grade.trace_ids) or 'unavailable'}",
-            "",
-            "## Deterministic failures",
-            "",
-            *(f"- {item}" for item in grade.deterministic_failures),
-            "",
-            "## Model-judged scores",
-            "",
-            *(f"- {name}: {score:.2f}" for name, score in grade.semantic_scores.items()),
-        ]
-        (target / f"{timestamp}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

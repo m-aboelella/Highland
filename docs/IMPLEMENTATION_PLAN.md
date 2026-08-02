@@ -229,7 +229,7 @@ User
 | M7 — Evaluation and reliability | ✅ Implemented | 5/5 | Deterministic and live-model evidence |
 | M8 — Self-hosted learning experience | ✅ Implemented | 5/5 | One-key stack and teaching path |
 | M9 — Simpler code structure | ✅ Implemented | 2/2 | Clear composition, configuration, and mock ownership |
-| M10 — Faithful evaluation | 🟨 Partial | 1/2 | Production-path retrieval and agent evaluation |
+| M10 — Faithful evaluation | ✅ Implemented | 2/2 | Production-path retrieval and agent evaluation |
 | M11 — Reproducible learning environment | ⬜ Not started | 0/2 | Locked setup, smoke tests, and experiment guidance |
 
 ---
@@ -2022,7 +2022,7 @@ Organize mock systems by source boundary
 
 # M10 — Faithful evaluation
 
-**Milestone status:** 🟨 Partial
+**Milestone status:** ✅ Implemented
 **Milestone outcome:** Algorithm and model changes are measured through the
 same retrieval, agent, MCP, policy, and workflow paths used by the application.
 
@@ -2073,8 +2073,8 @@ Implementation notes:
 
 ## E10.2 — Evaluate production orchestration
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E10.1
 
 Scope:
@@ -2101,6 +2101,21 @@ Suggested commit:
 ```text
 Evaluate Highland through production orchestration
 ```
+
+Implementation notes:
+
+- Discover evaluations now execute through `ApplicationServices`, production
+  retrieval, the agent loop, MCP tools, policy, durable approvals, and run
+  events. The raw-seed document shortcut has been removed.
+- The evaluator constructs the canonical weekly customer-health runner through
+  `ApplicationServices`; its per-customer MCP reads, isolated classification,
+  artifact output, and production run events are graded directly.
+- Citation validity, source coverage, customer isolation, required tool use,
+  approval pauses/rejections, and trace completeness remain deterministic;
+  only claim/behavior/structure quality uses structured model judging.
+- `--repeat` produces aggregate pass rate, semantic scores, usage, estimated
+  cost, latency, effective configuration, and exact run trace IDs. Evaluation
+  approval checkpoints are always rejected and never resume external writes.
 
 ---
 

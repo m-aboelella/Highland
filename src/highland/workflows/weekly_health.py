@@ -17,6 +17,7 @@ from highland.models.contracts import (
     ModelCapabilities,
     Usage,
 )
+from highland.runtime.events import RunEventStore
 from highland.runtime.policy import RunScope, ToolRegistry
 
 
@@ -80,16 +81,28 @@ class WeeklyCustomerHealthRunner:
         tools: ToolRegistry | Any,
         artifacts: ArtifactRepository,
         runs: WeeklyHealthRunRepository,
+        events: RunEventStore | None = None,
     ) -> None:
         self.model = model
         self.tools = tools
         self.artifacts = artifacts
         self.runs = runs
+        self.events = events
 
     async def run(
         self, *, run_id: str, workflow_version: int, scheduled: bool = False
     ) -> WeeklyHealthRun:
         started_at = datetime.now(UTC)
+        if self.events:
+            self.events.append(
+                run_id,
+                "run_started",
+                {
+                    "workflow_id": "wf_weekly_customer_health",
+                    "workflow_version": workflow_version,
+                    "scheduled": scheduled,
+                },
+            )
         customers_result = await self._tool(
             "crm__list_customers",
             {"status": "active"},
@@ -161,6 +174,16 @@ class WeeklyCustomerHealthRunner:
                     logical_call_id=f"{run_id}:health:{customer_id}",
                 )
             )
+            if self.events:
+                self.events.append(
+                    run_id,
+                    "model_call",
+                    {
+                        "node_id": f"classify:{customer_id}",
+                        "customer_id": customer_id,
+                        "usage": response.usage.model_dump(mode="json"),
+                    },
+                )
             try:
                 classification = HealthClassification.model_validate(
                     response.structured_output
@@ -199,6 +222,17 @@ class WeeklyCustomerHealthRunner:
             completed_at=datetime.now(UTC),
         )
         self.runs.save(result)
+        if self.events:
+            self.events.append(
+                run_id,
+                "run_completed",
+                {
+                    "workflow_id": result.workflow_id,
+                    "workflow_version": result.workflow_version,
+                    "accounts": [account.customer_id for account in result.accounts],
+                    "artifact_id": result.artifact_id,
+                },
+            )
         return result
 
     async def _tool(
@@ -217,7 +251,33 @@ class WeeklyCustomerHealthRunner:
             logical_step_id=step,
             scope=scope,
         )
+        if self.events:
+            self.events.append(
+                run_id,
+                "tool_call",
+                {
+                    "node_id": step,
+                    "tool_call": {
+                        "name": call.qualified_name,
+                        "arguments": call.arguments,
+                    },
+                    "mode": call.policy.mode.value,
+                    "customer_scope": sorted(scope.allowed_customers),
+                },
+            )
         result = await self.tools.execute(call)
+        if self.events:
+            self.events.append(
+                run_id,
+                "tool_result",
+                {
+                    "node_id": step,
+                    "tool": call.qualified_name,
+                    "content": result.content,
+                    "structured_content": result.structured_content,
+                    "is_error": result.is_error,
+                },
+            )
         if result.is_error:
             raise RuntimeError(result.content)
         if result.structured_content is not None:
