@@ -15,9 +15,25 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 
 cleanup() {
-  docker compose down
+  smoke_status=$?
+  trap - EXIT HUP INT TERM
+
+  if [ "$smoke_status" -ne 0 ]; then
+    echo "Compose smoke test failed; preserving service diagnostics before cleanup." >&2
+    docker compose ps --all >&2 || :
+    docker compose logs --no-color highland-bootstrap highland-api >&2 || :
+  fi
+
+  docker compose down || cleanup_status=$?
+  if [ "$smoke_status" -ne 0 ]; then
+    exit "$smoke_status"
+  fi
+  exit "${cleanup_status:-0}"
 }
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 echo "Starting a deterministic Highland stack..."
 HIGHLAND_MODEL_BACKEND=scripted COHERE_API_KEY= \

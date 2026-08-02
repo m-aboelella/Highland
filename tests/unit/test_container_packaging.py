@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -89,6 +90,33 @@ def test_compose_smoke_covers_index_api_search_ui_and_shutdown() -> None:
     assert '"http://web:3000"' in script
     assert "highland eval retrieval --enforce-baseline" in script
     assert "docker compose down" in script
+
+
+def test_compose_smoke_preserves_scoped_failure_evidence_before_cleanup() -> None:
+    script = (REPO_ROOT / "scripts" / "compose_smoke.sh").read_text(encoding="utf-8")
+
+    failure_branch = script.index('if [ "$smoke_status" -ne 0 ]')
+    service_state = script.index("docker compose ps --all", failure_branch)
+    scoped_logs = script.index(
+        "docker compose logs --no-color highland-bootstrap highland-api",
+        failure_branch,
+    )
+    cleanup = script.index("docker compose down", failure_branch)
+
+    assert failure_branch < service_state < scoped_logs < cleanup
+    assert "docker compose config" not in script
+    assert "docker inspect" not in script
+
+
+def test_compose_smoke_has_valid_posix_shell_syntax() -> None:
+    script = REPO_ROOT / "scripts" / "compose_smoke.sh"
+
+    subprocess.run(
+        ["sh", "-n", str(script)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
 
 def test_container_context_excludes_runtime_state_and_secrets() -> None:

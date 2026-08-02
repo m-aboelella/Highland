@@ -232,6 +232,7 @@ User
 | M10 — Faithful evaluation | ✅ Implemented | 2/2 | Production-path retrieval and agent evaluation |
 | M11 — Reproducible learning environment | ✅ Implemented | 2/2 | Locked setup, smoke tests, and experiment guidance |
 | M12 — Cross-environment CI stability | ✅ Implemented | 2/2 | Portable export assertions and task-safe MCP lifecycle |
+| M13 — Compose failure evidence | ✅ Implemented | 1/1 | Preserve actionable bootstrap diagnostics in CI |
 
 ---
 
@@ -2282,6 +2283,50 @@ Delivered:
 
 ---
 
+# M13 — Compose failure evidence
+
+**Milestone status:** ✅ Implemented
+**Milestone outcome:** A failed clean-stack runtime gate retains enough service
+state and bootstrap output to diagnose the container-only failure before the
+stack is removed.
+
+## E13.1 — Preserve Compose bootstrap diagnostics
+
+**Status:** ✅ Implemented
+**Implemented in:** `Preserve Compose bootstrap failure evidence`
+**Depends on:** M12
+
+Scope:
+
+- On smoke-test failure, print `docker compose ps --all` and the bootstrap/API
+  service logs before cleanup.
+- Preserve guaranteed `docker compose down` cleanup and avoid printing secrets.
+- Add static tests for diagnostic ordering and shell syntax.
+
+Verification:
+
+```bash
+pytest tests/unit/test_container_packaging.py
+make ci
+```
+
+Suggested commit:
+
+```text
+Preserve Compose bootstrap failure evidence
+```
+
+Delivered:
+
+- Failed smoke runs print the full Compose service state and scoped bootstrap/API
+  logs before the stack is removed, while successful runs remain concise.
+- Diagnostics avoid environment/configuration inspection, cleanup remains
+  guaranteed, and the original failure status is preserved.
+- Static packaging tests enforce diagnostic ordering, service scoping, and POSIX
+  shell syntax.
+
+---
+
 # Working agreement for future Codex sessions
 
 ## Session startup
@@ -2350,7 +2395,7 @@ E1.* + E2.1 -> E2.4 -> E2.5 -> E2.6
 E3.2 + model providers -> E3.3 -> E3.4 -> E3.5 -> E3.6
 M2 + M3 -> M4 -> M5
 M2 + M3 + M5 -> M6
-M3 through M6 -> M7 -> M8 -> M9 -> M10 -> M11 -> M12
+M3 through M6 -> M7 -> M8 -> M9 -> M10 -> M11 -> M12 -> M13
 ```
 
 E3.1 is intentionally required by E2.2 because index population should teach
@@ -2361,7 +2406,7 @@ behind the connector layer.
 
 Highland is complete when:
 
-- all epics through M12 are implemented or explicitly moved out of scope with a
+- all epics through M13 are implemented or explicitly moved out of scope with a
   documented reason;
 - the default suite is deterministic, offline, and non-billable;
 - the three live Cohere scenarios can be run separately with explicit opt-in;
