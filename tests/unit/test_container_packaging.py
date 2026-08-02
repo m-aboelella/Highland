@@ -32,6 +32,8 @@ def test_root_bootstrap_only_asks_for_a_key_and_waits_for_readiness() -> None:
     script = (REPO_ROOT / "bootstrap.sh").read_text(encoding="utf-8")
 
     assert "Cohere API key:" in script
+    assert "trap 'stty echo'" in script
+    assert "stty -g" not in script
     assert "HIGHLAND_MODEL_BACKEND=cohere" in script
     assert "COHERE_API_KEY=%s" in script
     assert "docker compose up --build --detach --wait" in script

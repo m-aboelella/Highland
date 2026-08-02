@@ -22,11 +22,10 @@ if [ -z "$cohere_key" ]; then
     exit 1
   fi
   printf "Cohere API key: "
-  previous_tty=$(stty -g)
-  trap 'stty "$previous_tty"' EXIT HUP INT TERM
+  trap 'stty echo' EXIT HUP INT TERM
   stty -echo
   IFS= read -r cohere_key
-  stty "$previous_tty"
+  stty echo
   trap - EXIT HUP INT TERM
   printf "\n"
 fi
