@@ -67,4 +67,7 @@ status, _ = get("http://web:3000")
 assert status == 200
 PY
 
+echo "Enforcing the committed deterministic retrieval baseline..."
+docker compose exec -T highland-api highland eval retrieval --enforce-baseline
+
 echo "Compose smoke test passed; stopping the stack."

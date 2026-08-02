@@ -14,6 +14,12 @@ The easiest live-model setup asks for only one Cohere API key:
 ./bootstrap.sh
 ```
 
+On Windows PowerShell, run the equivalent guided setup:
+
+```powershell
+.\bootstrap.ps1
+```
+
 For the deterministic, non-billable learning mode, start the complete local
 stack directly:
 
@@ -39,9 +45,12 @@ The executable tutorials below use the Python development environment because
 they expose exact assertions and trace records:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -e '.[dev]'
+make setup
 ```
+
+This installs the exact graph in `requirements-dev.lock`. `pyproject.toml`
+remains the readable dependency declaration; maintainers regenerate the locks
+with `make lock` after intentionally changing a dependency range.
 
 ## 1. Discover: prepare for a customer meeting
 
@@ -203,3 +212,39 @@ Real chat, embed, and rerank calls are potentially billable. Before opting in:
 
 The application budgets stop the next call when a limit is reached; they are
 educational guardrails, not a financial guarantee.
+
+## Compare a Cohere reranker without changing the benchmark
+
+Use the same reviewed relevance set for every run. First establish that the
+checked-in deterministic floor still passes, then start the live stack:
+
+```bash
+docker compose up --build --detach --wait
+docker compose exec highland-api highland eval retrieval --enforce-baseline
+docker compose down
+./bootstrap.sh
+docker compose run -e HIGHLAND_RUN_LIVE_TESTS=1 --rm highland-api \
+  highland eval retrieval --baseline config/evaluation/retrieval-baseline.json
+cp var/highland/reports/retrieval/retrieval.json /tmp/rerank-fast.json
+```
+
+The live bootstrap detects that the existing scripted index used a different
+embedding model and rebuilds it with Cohere Embed before the API starts.
+
+The default live reranker is `rerank-v4.0-fast`. To compare another compatible
+Cohere reranker, change only `HIGHLAND_RERANK_MODEL` in `.env`, recreate the API,
+and run the identical benchmark:
+
+```bash
+docker compose up --build --detach --wait
+docker compose run -e HIGHLAND_RUN_LIVE_TESTS=1 --rm highland-api \
+  highland eval retrieval --baseline config/evaluation/retrieval-baseline.json
+cp var/highland/reports/retrieval/retrieval.json /tmp/rerank-candidate.json
+```
+
+Compare precision@k, recall@k, MRR@k, stage loss, latency, and the recorded
+rerank model in the two saved reports. A reranker-only change does not require
+new document embeddings. Any change to `HIGHLAND_EMBEDDING_MODEL` does: run
+`highland index rebuild` before evaluating so document and query vectors use
+the same model. Live Embed and Rerank calls are billable; keep the explicit
+opt-in and configured budgets.

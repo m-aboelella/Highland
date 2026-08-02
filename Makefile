@@ -52,3 +52,4 @@ release-check: ci
 		tests/acceptance/test_meeting_preparation.py \
 		tests/acceptance/test_deployment_investigation.py \
 		tests/acceptance/test_weekly_customer_health.py
+	./scripts/compose_smoke.sh

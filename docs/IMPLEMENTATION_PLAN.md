@@ -230,7 +230,7 @@ User
 | M8 — Self-hosted learning experience | ✅ Implemented | 5/5 | One-key stack and teaching path |
 | M9 — Simpler code structure | ✅ Implemented | 2/2 | Clear composition, configuration, and mock ownership |
 | M10 — Faithful evaluation | ✅ Implemented | 2/2 | Production-path retrieval and agent evaluation |
-| M11 — Reproducible learning environment | 🟨 In progress | 1/2 | Locked setup, smoke tests, and experiment guidance |
+| M11 — Reproducible learning environment | ✅ Implemented | 2/2 | Locked setup, smoke tests, and experiment guidance |
 
 ---
 
@@ -2121,7 +2121,7 @@ Implementation notes:
 
 # M11 — Reproducible learning environment
 
-**Milestone status:** 🟨 In progress
+**Milestone status:** ✅ Implemented
 **Milestone outcome:** Clean checkouts produce reproducible dependencies,
 startup, and experiments across supported machines.
 
@@ -2168,8 +2168,8 @@ Delivered:
 
 ## E11.2 — Document reproducible experiments
 
-**Status:** ⬜ Not started
-**Implemented in:** —
+**Status:** ✅ Implemented
+**Implemented in:** `Document reproducible Highland experiments`
 **Depends on:** E11.1
 
 Scope:
@@ -2193,6 +2193,17 @@ Suggested commit:
 ```text
 Document reproducible Highland experiments
 ```
+
+Delivered:
+
+- Architecture guidance now describes the shared `ApplicationServices`
+  composition root, route groups, vertical mock-system ownership, and the
+  production retrieval and orchestration paths used by evaluation.
+- Testing and release guidance use locked installs, the reviewed relevance set,
+  deterministic baseline enforcement, and the clean Compose smoke gate.
+- The existing learning path includes a repeatable Cohere reranker comparison,
+  recorded quality/latency measures, explicit billable opt-in, and the rule
+  that embedding model changes require an index rebuild.
 
 ---
 

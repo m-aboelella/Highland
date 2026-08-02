@@ -87,6 +87,7 @@ def test_compose_smoke_covers_index_api_search_ui_and_shutdown() -> None:
     assert "http://127.0.0.1:8080/health" in script
     assert "http://127.0.0.1:8080/discover/search" in script
     assert '"http://web:3000"' in script
+    assert "highland eval retrieval --enforce-baseline" in script
     assert "docker compose down" in script
 
 

@@ -30,6 +30,8 @@ Install Docker, then run:
 ./bootstrap.sh
 ```
 
+On Windows PowerShell, use `./bootstrap.ps1` for the same guided flow.
+
 Paste a Cohere API key at the private prompt. That is the only configuration
 the guided setup asks for. The script:
 
@@ -60,12 +62,15 @@ offline; the one-key path is best for exploring real model behavior.
 Python 3.11+ is required.
 
 ```bash
-python3 -m venv .venv
+make setup
 . .venv/bin/activate
-pip install -e '.[dev]'
 highland-mocks generate
 highland-mocks dev
 ```
+
+`make setup` installs the checked-in development lock. Production containers
+use the separate production lock, so Cohere, MCP, and their transitive
+dependencies resolve consistently in local development, CI, and Docker.
 
 The service catalog is available at `http://localhost:8099`, and each service
 has interactive API documentation at `/docs`, for example

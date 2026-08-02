@@ -11,12 +11,17 @@ Run the automated release gate:
 make release-check
 ```
 
+This includes hermetic CI, focused educational scenarios, the clean Compose
+smoke test, and enforcement of the committed retrieval baseline. Docker Compose
+v2 is therefore required for the release gate.
+
 Before tagging an educational release, complete this checklist from a clean
 clone:
 
 - [ ] `git status --short` is empty and the checkout contains no `.env`.
-- [ ] `docker compose up --build` reaches healthy status for the web, API,
-      catalog, and six mock services.
+- [ ] `make compose-smoke` starts a clean scripted stack, completes index
+      synchronization, verifies API health, indexed search and the UI, enforces
+      `config/evaluation/retrieval-baseline.json`, and shuts down cleanly.
 - [ ] `curl http://localhost:8080/health` reports `scripted`.
 - [ ] The four exercises in [the learning path](LEARNING_PATH.md) pass without
       an API key.
@@ -28,6 +33,8 @@ clone:
 - [ ] `highland reset --yes` restores mock state and clears only the displayed
       platform targets; `data/seed/` remains unchanged.
 - [ ] `make ci` passes without provider secrets.
+- [ ] `highland eval retrieval --enforce-baseline` reports no quality
+      regression and no customer-isolation leakage.
 - [ ] The three scenario manifests in `data/scenarios/` pass their deterministic
       evaluations.
 - [ ] If making a live-demo claim, review `config/model_prices.json`, set local

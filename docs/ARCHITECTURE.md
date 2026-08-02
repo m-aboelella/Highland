@@ -70,21 +70,51 @@ repository, but localhost networking remains in the architecture. This lets a
 learner use a packet trace, stop a connector, inject latency, or alter one
 system’s data without changing the agent runtime.
 
-## Planned platform layers
+## Implemented platform composition
 
-1. **Mock ecosystem** — delivered in the current foundation.
-2. **Application foundation** — typed configuration, inspectable local state,
-   capability-aware model providers, and usage budgets.
-3. **Discover** — ingestion into local chunk sidecars and a derived FAISS
-   vector index, hybrid retrieval, reranking, grounded chat, evidence viewer.
-4. **Create** — persistent editable artifacts, claim/evidence checks, Markdown
-   and PDF export.
-5. **Agent runtime** — direct Cohere Chat v2 loop, tool registry, budgets,
-   approval pauses, SSE trace.
-6. **Automate** — versioned five-node workflow model, scheduler, branch, loop,
-   run history.
-7. **Evaluation** — deterministic retrieval tests and optional billable
-   end-to-end model evaluations.
+`src/highland/services.py` is the composition root. `ApplicationServices`
+constructs the configured Cohere or scripted provider, retrieval, repositories,
+agent runtime, approvals, traces, artifacts, and workflows once. The HTTP API
+and evaluation commands both use this object, so evaluation does not maintain a
+second simplified platform.
+
+`src/highland/api.py` registers four teaching surfaces—Discover and runs,
+artifacts, workflows, and platform operations—without changing their public
+URLs. Business behavior remains in the corresponding service modules. The
+agent loop in `src/highland/runtime/agent.py` stays deliberately linear: model
+call, validated tool request, policy and approval decision, tool result, and
+final grounded response.
+
+Each fictional source under `src/highland_mocks/systems/` owns its seed
+fragment, REST routes, and FastMCP tool registration. Shared storage, errors,
+identifiers, and reset behavior remain central. This vertical organization
+makes one integration easy to trace without turning the sources into plugins.
+
+The delivered layers are:
+
+1. **Mock ecosystem** — six independently reachable fictional source systems
+   with REST and atomic MCP tools.
+2. **Application foundation** — typed settings, explicit model providers,
+   usage budgets, local durable state, and shared composition.
+3. **Discover** — ingestion, local filtering, BM25 and FAISS candidate search,
+   reciprocal-rank fusion, Cohere or deterministic reranking, grounded chat,
+   and evidence inspection.
+4. **Create** — persistent editable artifacts, evidence checks, revision
+   history, and Markdown/PDF export.
+5. **Agent runtime** — direct Cohere Chat v2 tool loop, policy, durable approval
+   pauses, MCP execution, SSE events, and trace history.
+6. **Automate** — a bounded versioned workflow model, scheduler, branches,
+   loops, retries, approvals, and run history.
+7. **Evaluation** — the production Discover retriever and production agent and
+   workflow orchestration, with deterministic checks and explicitly opted-in
+   Cohere semantic grading.
+
+Retrieval evaluation reads the reviewed cases in
+`config/evaluation/retrieval-relevance.json`, calls `DiscoverService.search`,
+and reports candidate recall, precision/recall at k, MRR, stage loss, leakage,
+latency, model IDs, and corpus/index fingerprints. Scenario evaluation uses the
+same MCP gateway, policy, approval, trace, and workflow constructors as HTTP;
+write approvals are rejected during evaluation and are never executed.
 
 The baseline has no accounts, teams, roles, PostgreSQL, pgvector, or Redis.
 Atomic files under `var/highland/` are the application source of truth; FAISS is
