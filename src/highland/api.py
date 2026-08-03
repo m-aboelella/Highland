@@ -638,7 +638,7 @@ def register_api_routes(app: FastAPI, services: ApplicationServices) -> None:
     @discover_routes.post("/discover/search")
     async def discover_search(request: SearchRequest) -> dict[str, object]:
         try:
-            result = await discover.search(request)
+            result = await discover.search_sources(request)
         except FileNotFoundError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
         return result.model_dump(mode="json")

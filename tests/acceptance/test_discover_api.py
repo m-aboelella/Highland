@@ -44,7 +44,14 @@ def document(source_id: str, text: str, customer: str) -> SourceDocument:
 def client_with_index(tmp_path: Path) -> tuple[TestClient, ScriptedChatModel, str]:
     northwind = document(
         "doc_northwind",
-        "Northwind compaction contention caused retrieval latency.",
+        (
+            "# Symptoms and hypothesis\n"
+            "Northwind compaction contention caused retrieval latency.\n\n"
+            "# Mitigation\n"
+            "Compaction is paused while the team validates memory pressure.\n\n"
+            "# Evidence\n"
+            "Shard memory exceeded the expected operating range."
+        ),
         "cus_northwind",
     )
     alpine = document("doc_alpine", "Alpine unrelated confidential roadmap.", "cus_alpine")
@@ -96,7 +103,7 @@ def client_with_index(tmp_path: Path) -> tuple[TestClient, ScriptedChatModel, st
     return TestClient(create_app(settings, model_provider=provider)), chat, cited_id
 
 
-def test_search_returns_filtered_evidence_without_chat(tmp_path: Path) -> None:
+def test_search_aggregates_filtered_passages_without_chat(tmp_path: Path) -> None:
     client, chat, _ = client_with_index(tmp_path)
     response = client.post(
         "/discover/search",
@@ -111,8 +118,16 @@ def test_search_returns_filtered_evidence_without_chat(tmp_path: Path) -> None:
     assert response.status_code == 200
     assert not chat.requests
     results = response.json()["results"]
-    assert results
-    assert {item["chunk"]["customer_id"] for item in results} == {"cus_northwind"}
+    assert len(results) == 1
+    assert results[0]["source_id"] == "doc_northwind"
+    assert results[0]["customer_id"] == "cus_northwind"
+    assert results[0]["score"] == max(item["score"] for item in results[0]["passages"])
+    assert [item["chunk"]["location"]["section"] for item in results[0]["passages"]] == [
+        "Symptoms and hypothesis",
+        "Mitigation",
+        "Evidence",
+    ]
+    assert len({item["chunk"]["id"] for item in results[0]["passages"]}) == 3
 
 
 def test_application_exposes_effective_models_limits_and_route_groups(tmp_path: Path) -> None:
@@ -159,6 +174,7 @@ def test_chat_preserves_citations_context_and_current_filters(tmp_path: Path) ->
     assert first.status_code == 200
     assert first.json()["citations"][0]["source_ids"] == [cited_id]
     assert first.json()["sources"][0]["chunk_id"] == cited_id
+    assert len(chat.requests[0].documents) == 3
 
     second = client.post(
         "/discover/chat",

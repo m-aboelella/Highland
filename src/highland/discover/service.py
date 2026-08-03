@@ -5,10 +5,17 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from highland.models.contracts import Document, Message, MessageRole
+from highland.models.contracts import Document, Message, MessageRole, Usage
 from highland.models.provider import ModelProvider
 from highland.retrieval.faiss_store import EmbeddingIndex, FaissStore, VectorIndexError
-from highland.retrieval.hybrid import HybridRetriever, RetrievalFilters, RetrievalResponse
+from highland.retrieval.hybrid import (
+    CandidateDiagnostics,
+    HybridRetriever,
+    RetrievalFilters,
+    RetrievalResponse,
+    RetrievalResult,
+    RetrievalTimings,
+)
 from highland.retrieval.sync import load_chunks
 from highland.runtime.agent import AgentLoop, AgentProfile, RunOutcome, RunRepository, RunStatus
 from highland.runtime.approvals import ApprovalStore
@@ -18,6 +25,9 @@ from highland.runtime.mcp import MCPGateway
 from highland.runtime.policy import RunScope, ToolRegistry
 
 from .conversations import ConversationMessage, ConversationStore, SourceReference
+
+_SOURCE_SEARCH_RESULT_LIMIT = 8
+_SOURCE_SEARCH_PASSAGE_LIMIT = 30
 
 
 def _completed_prior_messages(
@@ -68,6 +78,81 @@ class ChatRequest(SearchRequest):
     conversation_id: str
 
 
+class SearchSourceResult(DiscoverModel):
+    source_system: str
+    source_id: str
+    title: str
+    source_type: str
+    source_url: str
+    customer_id: str | None = None
+    updated_at: datetime
+    metadata: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
+    score: float
+    passages: list[RetrievalResult]
+
+
+class SearchResponse(DiscoverModel):
+    query: str
+    results: list[SearchSourceResult]
+    diagnostics: list[CandidateDiagnostics]
+    timings: RetrievalTimings
+    rerank_usage: Usage = Field(default_factory=Usage)
+    rerank_model: str | None = None
+
+
+def aggregate_search_results(
+    retrieval: RetrievalResponse,
+    *,
+    source_limit: int = _SOURCE_SEARCH_RESULT_LIMIT,
+) -> SearchResponse:
+    """Collapse ranked passages into source records without losing passage provenance."""
+    if source_limit <= 0:
+        raise ValueError("source_limit must be positive")
+
+    grouped: dict[tuple[str, str], list[RetrievalResult]] = {}
+    ordered_keys: list[tuple[str, str]] = []
+    for passage in retrieval.results:
+        key = (passage.chunk.source_system, passage.chunk.source_id)
+        if key not in grouped:
+            if len(ordered_keys) >= source_limit:
+                continue
+            grouped[key] = []
+            ordered_keys.append(key)
+        grouped[key].append(passage)
+
+    results: list[SearchSourceResult] = []
+    for key in ordered_keys:
+        ranked_passages = grouped[key]
+        representative = ranked_passages[0].chunk
+        passages = sorted(
+            ranked_passages,
+            key=lambda item: (item.chunk.location.ordinal, -item.score, item.chunk.id),
+        )
+        results.append(
+            SearchSourceResult(
+                source_system=representative.source_system,
+                source_id=representative.source_id,
+                title=representative.title,
+                source_type=representative.source_type,
+                source_url=representative.source_url,
+                customer_id=representative.customer_id,
+                updated_at=representative.updated_at,
+                metadata=representative.metadata,
+                score=max(item.score for item in ranked_passages),
+                passages=passages,
+            )
+        )
+
+    return SearchResponse(
+        query=retrieval.query,
+        results=results,
+        diagnostics=retrieval.diagnostics,
+        timings=retrieval.timings,
+        rerank_usage=retrieval.rerank_usage,
+        rerank_model=retrieval.rerank_model,
+    )
+
+
 class DiscoverService:
     def __init__(
         self,
@@ -92,7 +177,7 @@ class DiscoverService:
         self.connector_timeout_seconds = connector_timeout_seconds
         self.trace_context = trace_context or {}
 
-    def _retriever(self) -> HybridRetriever:
+    def _retriever(self, *, result_limit: int = 8) -> HybridRetriever:
         chunks = load_chunks(self.index_dir)
         if not chunks:
             raise FileNotFoundError("Search index is missing; run index sync first")
@@ -106,6 +191,7 @@ class DiscoverService:
             vector_store=vectors,
             embedding_index=indexer,
             reranker=self.provider.rerank,
+            result_limit=result_limit,
         )
 
     async def search(self, request: SearchRequest) -> RetrievalResponse:
@@ -113,6 +199,13 @@ class DiscoverService:
             request.query,
             filters=request.filters.retrieval(),
         )
+
+    async def search_sources(self, request: SearchRequest) -> SearchResponse:
+        retrieval = await self._retriever(result_limit=_SOURCE_SEARCH_PASSAGE_LIMIT).search(
+            request.query,
+            filters=request.filters.retrieval(),
+        )
+        return aggregate_search_results(retrieval)
 
     async def chat(self, request: ChatRequest, *, run_id: str) -> RunOutcome:
         retrieval = await self.search(request)
@@ -228,5 +321,8 @@ __all__ = [
     "DiscoverFilters",
     "DiscoverService",
     "SearchRequest",
+    "SearchResponse",
+    "SearchSourceResult",
     "VectorIndexError",
+    "aggregate_search_results",
 ]

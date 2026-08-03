@@ -16,7 +16,7 @@ const sourceLabels: Record<string, string> = {
   track: "Track",
 };
 
-type SearchResult = {
+type SearchPassage = {
   score: number;
   chunk: {
     id: string;
@@ -32,6 +32,18 @@ type SearchResult = {
   };
 };
 
+type SearchResult = {
+  source_system: string;
+  source_id: string;
+  title: string;
+  source_type: string;
+  source_url: string;
+  customer_id?: string;
+  updated_at: string;
+  score: number;
+  passages: SearchPassage[];
+};
+
 type SearchResponse = {
   query: string;
   results: SearchResult[];
@@ -43,6 +55,10 @@ export function SearchWorkspace() {
   const [response, setResponse] = useState<SearchResponse>();
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string>();
+  const passageCount = response?.results.reduce(
+    (total, result) => total + result.passages.length,
+    0,
+  ) ?? 0;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -109,8 +125,13 @@ export function SearchWorkspace() {
             <div>
               <p className="eyebrow">Ranked evidence</p>
               <h2 id="search-results-heading">
-                {response.results.length} {response.results.length === 1 ? "passage" : "passages"}
+                {response.results.length} {response.results.length === 1 ? "source" : "sources"}
               </h2>
+              {!!response.results.length && (
+                <small>
+                  {passageCount} matched {passageCount === 1 ? "passage" : "passages"}
+                </small>
+              )}
             </div>
             <span>{Math.round(response.timings.total_ms)} ms</span>
           </header>
@@ -122,26 +143,40 @@ export function SearchWorkspace() {
           )}
           <ol>
             {response.results.map((result, index) => (
-              <li key={result.chunk.id}>
+              <li key={`${result.source_system}:${result.source_id}`}>
                 <article className="search-result">
                   <header>
                     <span>#{index + 1}</span>
-                    <span>{sourceLabels[result.chunk.source_system] ?? result.chunk.source_system}</span>
-                    <span>{result.chunk.source_type.replaceAll("_", " ")}</span>
+                    <span>{sourceLabels[result.source_system] ?? result.source_system}</span>
+                    <span>{result.source_type.replaceAll("_", " ")}</span>
                   </header>
-                  <h3>{result.chunk.title}</h3>
-                  <p className="result-section">{result.chunk.location.section}</p>
-                  <div className="markdown-answer"><ReactMarkdown remarkPlugins={[remarkGfm]}>{result.chunk.text}</ReactMarkdown></div>
+                  <h3>{result.title}</h3>
+                  <p className="result-section">
+                    {result.passages.length} matched {result.passages.length === 1 ? "passage" : "passages"}
+                  </p>
+                  <div className="result-passages">
+                    {result.passages.map((passage) => (
+                      <section className="result-passage" key={passage.chunk.id}>
+                        <header>
+                          <h4>{passage.chunk.location.section}</h4>
+                          <span>{passage.score.toFixed(3)}</span>
+                        </header>
+                        <div className="markdown-answer">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{passage.chunk.text}</ReactMarkdown>
+                        </div>
+                      </section>
+                    ))}
+                  </div>
                   <dl>
                     <dt>Relevance</dt><dd>{result.score.toFixed(3)}</dd>
-                    <dt>Customer</dt><dd>{result.chunk.customer_id ?? "Shared"}</dd>
-                    <dt>Updated</dt><dd>{new Date(result.chunk.updated_at).toLocaleString()}</dd>
+                    <dt>Customer</dt><dd>{result.customer_id ?? "Shared"}</dd>
+                    <dt>Updated</dt><dd>{new Date(result.updated_at).toLocaleString()}</dd>
                   </dl>
                   <details className="source-access">
                     <summary>Source provenance</summary>
                     <p className="source-identifier">
                       <b>Canonical identifier</b>
-                      <code>{result.chunk.source_url}</code>
+                      <code>{result.source_url}</code>
                     </p>
                     <small>
                       Demo source identifiers record where evidence came from; they are not public websites.

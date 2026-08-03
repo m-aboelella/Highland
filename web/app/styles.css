@@ -277,6 +277,13 @@ button { justify-self: end; padding: 10px 16px; color: #10231f; background: var(
 .search-result > header span { padding: 3px 7px; color: var(--gold); background: #0b1917; border-radius: 999px; font-size: 10px; text-transform: capitalize; }
 .search-result h3 { margin: 12px 0 2px; font: 500 24px Georgia, serif; }
 .result-section { margin: 0 0 14px; color: var(--mint); font-size: 11px; }
+.result-passages { display: grid; gap: 10px; }
+.result-passage { padding: 14px; background: #0b1917; border: 1px solid var(--line); border-radius: 9px; }
+.result-passage > header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.result-passage h4 { margin: 0; color: var(--mint); font-size: 12px; font-weight: 600; }
+.result-passage > header span { color: var(--muted); font-size: 10px; }
+.result-passage .markdown-answer > :first-child { margin-top: 8px; }
+.result-passage .markdown-answer > :last-child { margin-bottom: 0; }
 .search-result > dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin-top: 16px; font-size: 11px; }
 .search-result > dl dt { color: var(--muted); }
 .search-result > dl dd { margin: 0; }
