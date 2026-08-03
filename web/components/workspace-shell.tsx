@@ -21,10 +21,10 @@ const fallback: WorkspaceStatus = {
 };
 
 const navigation = [
-  { label: "New chat", href: "/" },
-  { label: "Search", href: "/search" },
+  { label: "Ask Highland", href: "/" },
+  { label: "Source search", href: "/search" },
   { label: "Artifacts", href: "/artifacts" },
-  { label: "Agents", href: "/agents" },
+  { label: "Agent setup", href: "/agents" },
   { label: "Automations", href: "/automations" },
 ];
 

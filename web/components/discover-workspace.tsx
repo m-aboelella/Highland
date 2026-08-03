@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { ArtifactDocument, ArtifactEditor } from "./artifact-editor";
+import { SourceFilterControls } from "./source-filter-controls";
 
 export type TraceEvent = {
   id: number;
@@ -58,6 +59,10 @@ const SOURCE_LABELS: Record<string, string> = {
   projects: "Track",
 };
 
+const TERMINAL_EVENT_TYPES = [
+  "final", "error", "run_cancelled", "run_completed", "run_failed",
+];
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -71,6 +76,32 @@ function toolDetails(event: TraceEvent) {
     name: String(call.name ?? "tool"),
     arguments: asRecord(call.arguments),
   };
+}
+
+type ToolChoice = ReturnType<typeof toolDetails>;
+
+function embeddedToolChoices(event: TraceEvent): ToolChoice[] | undefined {
+  if (!("tool_calls" in event.payload)) return undefined;
+  if (!Array.isArray(event.payload.tool_calls)) return [];
+  return event.payload.tool_calls.map((item) => {
+    const call = asRecord(item);
+    return {
+      id: String(call.id ?? ""),
+      name: String(call.name ?? "tool"),
+      arguments: asRecord(call.arguments),
+    };
+  });
+}
+
+function choicesAfterModel(events: TraceEvent[], modelIndex: number) {
+  const embedded = embeddedToolChoices(events[modelIndex]);
+  if (embedded !== undefined) return embedded;
+  const choices: ToolChoice[] = [];
+  for (const event of events.slice(modelIndex + 1)) {
+    if (["model_call", "final", "error", "run_cancelled"].includes(event.type)) break;
+    if (event.type === "tool_call") choices.push(toolDetails(event));
+  }
+  return choices;
 }
 
 function friendlyTool(toolName: string) {
@@ -87,6 +118,44 @@ function formatArguments(arguments_: Record<string, unknown>) {
   return entries.map(([name, value]) => `${name.replaceAll("_", " ")}: ${String(value)}`).join(" · ");
 }
 
+function cleanToolError(content: unknown) {
+  return String(content ?? "The tool returned an error.")
+    .replace(/^Error executing tool [^:]+:\s*/i, "")
+    .replace(/^\w+ returned HTTP \d+:\s*/i, "");
+}
+
+function runFailureInfo(events: TraceEvent[]) {
+  const terminal = [...events].reverse().find((event) => (
+    event.type === "run_failed" || event.type === "error"
+  ));
+  if (!terminal) return undefined;
+  const modelCalls = events.filter((event) => event.type === "model_call").length;
+  const failedResult = [...events].reverse().find((event) => (
+    event.type === "tool_result" && Boolean(event.payload.is_error)
+  ));
+  const failedCall = failedResult
+    ? events.find((event) => (
+        event.type === "tool_call"
+        && toolDetails(event).id === String(failedResult.payload.tool_call_id ?? "")
+      ))
+    : undefined;
+  const failedTool = failedCall ? friendlyTool(toolDetails(failedCall).name) : undefined;
+  const reason = String(terminal.payload.reason ?? terminal.payload.message ?? "The run stopped.");
+  const budgetReached = reason.includes("maximum steps") || reason.includes("runtime budget");
+  return {
+    title: budgetReached
+      ? "Highland reached its run limit before writing the answer"
+      : "Discovery stopped before writing the answer",
+    message: budgetReached
+      ? `The agent used all ${modelCalls} available model calls while collecting and verifying evidence.`
+      : reason,
+    detail: failedResult
+      ? `${failedTool ? `${failedTool.system}: ${failedTool.action}` : "The last tool check"} failed with “${cleanToolError(failedResult.payload.content)}”. ${budgetReached ? "Highland attempted to recover, but the run limit was reached before it could synthesize a final response." : "Open the agent loop below to see how Highland handled the failed check."}`
+      : "Open the agent loop below to see the last completed step.",
+    reason,
+  };
+}
+
 export function TraceTimeline({ events }: { events: TraceEvent[] }) {
   const toolResults = new Map(
     events
@@ -96,7 +165,8 @@ export function TraceTimeline({ events }: { events: TraceEvent[] }) {
   const citationCount = events.filter((event) => event.type === "citation").length;
   const modelCount = events.filter((event) => event.type === "model_call").length;
   const toolCount = events.filter((event) => event.type === "tool_call").length;
-  const steps = events.flatMap((event) => {
+  const failure = runFailureInfo(events);
+  const steps = events.flatMap((event, eventIndex) => {
     if (event.type === "retrieval") {
       const results = Array.isArray(event.payload.results) ? event.payload.results.length : 0;
       return [{
@@ -109,17 +179,24 @@ export function TraceTimeline({ events }: { events: TraceEvent[] }) {
       }];
     }
     if (event.type === "model_call") {
-      const step = Number(event.payload.step ?? modelCount);
-      const finishReason = String(event.payload.finish_reason ?? "complete");
+      const step = String(event.payload.step ?? modelCount);
+      const choices = choicesAfterModel(events, eventIndex);
+      const requested = choices.map((choice) => {
+        const label = friendlyTool(choice.name);
+        return `${label.system}: ${label.action}`;
+      });
+      const resumed = step === "resume";
       return [{
         event,
         kind: "model",
-        title: `Model reasoning step ${step}`,
-        description: finishReason === "tool_call"
-          ? "The model reviewed the available context and chose a tool to gather or verify another fact."
+        title: resumed ? "Post-approval model decision" : `Model decision step ${step}`,
+        description: choices.length
+          ? `Requested ${requested.join(", ")} to gather or verify evidence.`
           : "The model had enough evidence and prepared the final response.",
-        status: finishReason === "tool_call" ? "Chose a tool" : "Synthesized",
-        details: event.payload,
+        status: choices.length
+          ? `Requested ${choices.length} ${choices.length === 1 ? "tool" : "tools"}`
+          : "Prepared answer",
+        details: { decision: event.payload, requested_tools: choices },
       }];
     }
     if (event.type === "tool_call") {
@@ -148,12 +225,14 @@ export function TraceTimeline({ events }: { events: TraceEvent[] }) {
         details: event.payload,
       }];
     }
-    if (event.type === "error" || event.type === "run_cancelled") {
+    if (["error", "run_cancelled", "run_failed"].includes(event.type)) {
       return [{
         event,
         kind: "error",
         title: event.type === "run_cancelled" ? "Run cancelled" : "Run failed",
-        description: String(event.payload.message ?? event.payload.reason ?? "The run stopped."),
+        description: event.type === "run_failed"
+          ? `${failure?.message ?? "The run stopped."} ${failure?.detail ?? ""}`
+          : String(event.payload.message ?? event.payload.reason ?? "The run stopped."),
         status: "Stopped",
         details: event.payload,
       }];
@@ -268,16 +347,99 @@ export function CitedAnswer({
   );
 }
 
-function parsedToolResult(content: unknown) {
+function parsedToolPayload(content: unknown) {
   if (typeof content !== "string") return {};
   try {
-    const parsed = JSON.parse(content) as unknown;
-    const root = asRecord(parsed);
-    const items = Array.isArray(root.items) ? root.items : [];
-    return asRecord(items[0] ?? parsed);
+    return asRecord(JSON.parse(content) as unknown);
   } catch {
     return {};
   }
+}
+
+function sourceRecords(payload: Record<string, unknown>) {
+  for (const key of ["items", "series"]) {
+    if (Array.isArray(payload[key])) {
+      return (payload[key] as unknown[]).map(asRecord).filter((item) => Object.keys(item).length);
+    }
+  }
+  return Object.keys(payload).length ? [payload] : [];
+}
+
+function matchingSourceRecord(
+  records: Record<string, unknown>[],
+  citation: Citation,
+) {
+  const identifiers = new Set(citation.source_ids);
+  const byIdentifier = records.find((record) => (
+    [record.id, record.source_id, record.key].some((value) => identifiers.has(String(value ?? "")))
+  ));
+  if (byIdentifier) return byIdentifier;
+  if (citation.text) {
+    const claim = citation.text.toLocaleLowerCase();
+    const byClaim = records.filter((record) => (
+      JSON.stringify(record).toLocaleLowerCase().includes(claim)
+    ));
+    if (byClaim.length === 1) return byClaim[0];
+  }
+  return records.length === 1 ? records[0] : undefined;
+}
+
+function isBrowsableSourceUrl(sourceUrl: string) {
+  try {
+    const url = new URL(sourceUrl);
+    return ["http:", "https:"].includes(url.protocol)
+      && !url.hostname.endsWith(".test")
+      && !url.hostname.endsWith(".summit.test");
+  } catch {
+    return false;
+  }
+}
+
+function SourceRecordAccess({
+  sourceUrl,
+  record,
+  raw,
+  ambiguousCount = 0,
+}: {
+  sourceUrl: string;
+  record?: Record<string, unknown>;
+  raw?: string;
+  ambiguousCount?: number;
+}) {
+  const view = record ? JSON.stringify(record, null, 2) : raw;
+  return (
+    <div className="source-access">
+      {view && (
+        <details className="tool-response">
+          <summary>{record ? "View source record" : "View supporting tool response"}</summary>
+          <div className="tool-response-body">
+            {ambiguousCount > 1 && (
+              <p>
+                This tool returned {ambiguousCount} records. The citation identifies the response,
+                but not one exact record, so the complete response is shown.
+              </p>
+            )}
+            <pre className="tool-response-json"><code>{view}</code></pre>
+          </div>
+        </details>
+      )}
+      {sourceUrl && (
+        <p className="source-identifier">
+          <b>Canonical identifier</b>
+          <code>{sourceUrl}</code>
+        </p>
+      )}
+      {sourceUrl && isBrowsableSourceUrl(sourceUrl) && (
+        <a href={sourceUrl} rel="noreferrer" target="_blank">Open external source ↗</a>
+      )}
+      {sourceUrl && !isBrowsableSourceUrl(sourceUrl) && (
+        <small>
+          This demo identifier is provenance, not a public website. The saved source data is
+          available above through Highland.
+        </small>
+      )}
+    </div>
+  );
 }
 
 export function CitationInspector({
@@ -311,11 +473,18 @@ export function CitationInspector({
   const toolResult = events.find((event) => (
     event.type === "tool_result" && event.payload.tool_call_id === toolCallId
   ));
-  const record = parsedToolResult(toolResult?.payload.content);
+  const payload = parsedToolPayload(toolResult?.payload.content);
+  const records = sourceRecords(payload);
+  const record = matchingSourceRecord(records, citation);
   const label = tool ? friendlyTool(tool.name) : undefined;
-  const sourceUrl = String(record.source_url ?? source?.source_url ?? "");
+  const sourceUrl = String(record?.source_url ?? source?.source_url ?? "");
   const sourceTitle = String(
-    record.title ?? record.name ?? record.key ?? record.id ?? source?.title ?? "Supporting evidence",
+    record?.title
+      ?? record?.name
+      ?? record?.key
+      ?? record?.id
+      ?? source?.title
+      ?? (records.length > 1 ? "Tool response supporting this claim" : "Supporting evidence"),
   );
 
   return (
@@ -337,15 +506,22 @@ export function CitationInspector({
         {source && <><dt>Source</dt><dd>{source.source_system} · {source.source_id}</dd></>}
         <dt>Result</dt><dd>{toolResult?.payload.is_error ? "Tool returned an error" : "Verified successfully"}</dd>
       </dl>
-      {sourceUrl && <a href={sourceUrl} rel="noreferrer" target="_blank">Open canonical source ↗</a>}
-      {toolResult && (
-        <details className="evidence-raw">
-          <summary>Inspect the supporting tool result</summary>
-          <pre>{String(toolResult.payload.content ?? "")}</pre>
-        </details>
-      )}
+      <SourceRecordAccess
+        ambiguousCount={record ? 0 : records.length}
+        raw={record
+          ? undefined
+          : Object.keys(payload).length
+            ? JSON.stringify(payload, null, 2)
+            : String(toolResult?.payload.content ?? "")}
+        record={record}
+        sourceUrl={sourceUrl}
+      />
       <p className="diagnostic-note">
-        This citation is tied to {tool ? "the live tool result shown above" : "the indexed passage shown above"}.
+        This citation is tied to {tool
+          ? record
+            ? "the live source record shown above"
+            : "the complete live tool response shown above"
+          : "the indexed passage shown above"}.
       </p>
     </aside>
   );
@@ -375,7 +551,7 @@ export function EvidencePanel({
         <dt>Updated</dt><dd>{new Date(selected.updated_at).toLocaleString()}</dd>
       </dl>
       {refreshed && <p className="fresh-badge">Mutable fact refreshed through MCP</p>}
-      <a href={selected.source_url}>Open canonical source</a>
+      <SourceRecordAccess sourceUrl={selected.source_url} />
       <p className="diagnostic-note">
         Selected because it passed the visible filters and retrieval/rerank stages shown in the trace.
       </p>
@@ -384,7 +560,7 @@ export function EvidencePanel({
 }
 
 export function DiscoverWorkspace() {
-  const [conversationId, setConversationId] = useState<string>();
+  const [runConversationId, setRunConversationId] = useState<string>();
   const [runId, setRunId] = useState<string>();
   const [liveRunId, setLiveRunId] = useState<string>();
   const [events, setEvents] = useState<TraceEvent[]>([]);
@@ -401,6 +577,7 @@ export function DiscoverWorkspace() {
   const [artifact, setArtifact] = useState<ArtifactDocument>();
   const [creatingArtifact, setCreatingArtifact] = useState(false);
   const source = useRef<EventSource>(null);
+  const runOutputRef = useRef<HTMLElement>(null);
   const receivedEventIds = useRef(new Set<number>());
 
   const refreshRuns = useCallback(async (signal?: AbortSignal) => {
@@ -431,6 +608,7 @@ export function DiscoverWorkspace() {
     if (!liveRunId) return;
     source.current?.close();
     const stream = new EventSource(`${API}/runs/${liveRunId}/events`);
+    let terminalReceived = false;
     source.current = stream;
     stream.onopen = () => setStreamNotice(undefined);
     const receive = (message: MessageEvent) => {
@@ -449,7 +627,8 @@ export function DiscoverWorkspace() {
       if (event.type === "final") {
         setAnswer((current) => current || String(event.payload.content ?? ""));
       }
-      if (["final", "error", "run_cancelled"].includes(event.type)) {
+      if (TERMINAL_EVENT_TYPES.includes(event.type)) {
+        terminalReceived = true;
         setLiveRunId(undefined);
         setStreamNotice(undefined);
         stream.close();
@@ -459,12 +638,27 @@ export function DiscoverWorkspace() {
     for (const name of [
       "run_started", "retrieval", "model_call", "model_delta", "tool_call",
       "tool_result", "approval_required", "citation", "error", "final", "run_cancelled",
+      "run_completed", "run_failed",
     ]) stream.addEventListener(name, receive);
     stream.onerror = () => {
-      setStreamNotice("Live updates were interrupted. Reconnecting to the persisted run…");
+      if (!terminalReceived) {
+        setStreamNotice("Connection paused. Rejoining the saved run…");
+      }
     };
     return () => stream.close();
   }, [liveRunId, refreshRuns]);
+
+  useEffect(() => {
+    if (!liveRunId || !runExpanded) return;
+    const timeout = window.setTimeout(() => {
+      const panel = runOutputRef.current;
+      panel?.focus({ preventScroll: true });
+      if (panel && "scrollIntoView" in panel) {
+        panel.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [liveRunId, runExpanded]);
 
   async function restoreRun(run: RunSummary) {
     if (runId === run.run_id) {
@@ -492,7 +686,7 @@ export function DiscoverWorkspace() {
       setEvents(trace);
       setRunId(run.run_id);
       setRunExpanded(true);
-      setConversationId(run.conversation_id);
+      setRunConversationId(run.conversation_id);
       const replayedAnswer = summary.final?.content
         ?? trace
           .filter((event) => event.type === "model_delta")
@@ -500,8 +694,10 @@ export function DiscoverWorkspace() {
           .join("");
       setAnswer(replayedAnswer);
       if (!replayedAnswer && summary.status !== "running") {
-        const failure = [...trace].reverse().find((event) => event.type === "error");
-        setError(String(failure?.payload.message ?? `This run ended as ${summary.status}.`));
+        const errorEvent = [...trace].reverse().find((event) => event.type === "error");
+        if (errorEvent) {
+          setError(String(errorEvent.payload.message ?? "The run failed."));
+        }
       }
       if (summary.status === "running") setLiveRunId(run.run_id);
     } catch (caught) {
@@ -524,6 +720,7 @@ export function DiscoverWorkspace() {
     source.current?.close();
     setLiveRunId(undefined);
     setRunId(undefined);
+    setRunConversationId(undefined);
     const data = new FormData(event.currentTarget);
     const content = String(data.get("question") ?? "").trim();
     const customerId = String(data.get("customer_id") ?? "").trim();
@@ -534,13 +731,14 @@ export function DiscoverWorkspace() {
     }
     setStarting(true);
     try {
-      let conversation = conversationId;
-      if (!conversation) {
-        const created = await fetch(`${API}/conversations`, { method: "POST" });
-        if (!created.ok) throw new Error("A conversation could not be created.");
-        conversation = String((await created.json()).id);
-        setConversationId(conversation);
-      }
+      const created = await fetch(`${API}/conversations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: content.slice(0, 200) }),
+      });
+      if (!created.ok) throw new Error("A conversation could not be created.");
+      const conversation = String((await created.json()).id);
+      setRunConversationId(conversation);
       const response = await fetch(`${API}/conversations/${conversation}/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -549,7 +747,7 @@ export function DiscoverWorkspace() {
           filters: {
             customer_id: customerId || null,
             source_types: sourceTypes ? [sourceTypes] : [],
-            allowed_visibilities: ["internal", "shared"],
+            allowed_visibilities: [],
           },
         }),
       });
@@ -574,10 +772,22 @@ export function DiscoverWorkspace() {
   const retrieval = events.find((event) => event.type === "retrieval");
   const evidence = ((retrieval?.payload.results as Array<{ chunk: Evidence }> | undefined) ?? [])
     .map((item) => item.chunk);
-  const runFinished = events.some((event) =>
-    ["final", "error", "run_cancelled"].includes(event.type),
-  );
+  const failure = runFailureInfo(events);
+  const runFinished = events.some((event) => TERMINAL_EVENT_TYPES.includes(event.type));
   const runActive = Boolean(liveRunId && !runFinished);
+  const runCancelled = events.some((event) => event.type === "run_cancelled");
+  const runCompleted = events.some((event) => (
+    event.type === "final" || event.type === "run_completed"
+  ));
+  const modelStepCount = events.filter((event) => event.type === "model_call").length;
+  const toolCheckCount = events.filter((event) => event.type === "tool_call").length;
+  const runHeading = failure
+    ? "Discovery stopped"
+    : runCancelled
+      ? "Discovery cancelled"
+      : runCompleted
+        ? "Grounded answer and evidence"
+        : "Discovery in progress";
 
   function selectCitation(citationIndex: number) {
     setSelectedCitation(citationIndex);
@@ -601,10 +811,10 @@ export function DiscoverWorkspace() {
   }
 
   async function turnIntoArtifact() {
-    if (!conversationId || !runId) return;
+    if (!runConversationId || !runId) return;
     setCreatingArtifact(true);
     try {
-      const conversationResponse = await fetch(`${API}/conversations/${conversationId}`);
+      const conversationResponse = await fetch(`${API}/conversations/${runConversationId}`);
       if (!conversationResponse.ok) throw new Error("The completed conversation could not be loaded.");
       const conversation = await conversationResponse.json() as {
         messages: Array<{ id: string; role: string; run_id?: string }>;
@@ -618,7 +828,7 @@ export function DiscoverWorkspace() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           artifact_type: "briefing",
-          conversation_id: conversationId,
+          conversation_id: runConversationId,
           message_id: message.id,
         }),
       });
@@ -634,9 +844,12 @@ export function DiscoverWorkspace() {
 
   return (
     <section className="welcome">
-      <p className="eyebrow">Discover · Scripted mode is clearly labelled</p>
-      <h1>Find the signal across your workspace.</h1>
-      <p>Search local enterprise knowledge, inspect its sources, and ask grounded follow-ups.</p>
+      <p className="eyebrow">Ask Highland</p>
+      <h1>Investigate across your workspace.</h1>
+      <p>
+        Ask a question and let the workspace agent verify live facts. Each discovery starts with
+        a clean model conversation.
+      </p>
       <form className="prompt" onSubmit={submit}>
         <label htmlFor="question">Ask Highland</label>
         <textarea
@@ -646,12 +859,7 @@ export function DiscoverWorkspace() {
           placeholder="Prepare me for the Northwind customer meeting…"
           required
         />
-        <fieldset className="filters">
-          <legend>Current filters</legend>
-          <label>Customer <input name="customer_id" placeholder="cus_northwind" /></label>
-          <label>Source type <input name="source_type" placeholder="runbook" /></label>
-          <span>Visibility: internal + shared</span>
-        </fieldset>
+        <SourceFilterControls />
         <div className="run-actions">
           {runActive && (
             <button className="secondary" onClick={() => void cancel()} type="button">
@@ -665,6 +873,78 @@ export function DiscoverWorkspace() {
       </form>
       {error && <p className="form-error" role="alert">{error}</p>}
       {streamNotice && <p className="stream-notice" role="status">{streamNotice}</p>}
+      {runExpanded && (runId || answer || events.length > 0) && (
+        <section
+          aria-labelledby="run-output-heading"
+          className="run-output"
+          ref={runOutputRef}
+          tabIndex={-1}
+        >
+          <header>
+            <div>
+              <p className="eyebrow">Run output</p>
+              <h2 id="run-output-heading">{runHeading}</h2>
+            </div>
+            <button className="secondary" onClick={() => setRunExpanded(false)} type="button">
+              Collapse output
+            </button>
+          </header>
+          {runActive && (
+            <div className="run-progress" role="status">
+              <span aria-hidden="true" className="run-progress-dot" />
+              <div>
+                <strong>Highland is investigating your question</strong>
+                <p>
+                  {modelStepCount} model {modelStepCount === 1 ? "step" : "steps"} · {toolCheckCount} live {toolCheckCount === 1 ? "check" : "checks"}
+                </p>
+              </div>
+            </div>
+          )}
+          {failure && (
+            <div className="run-failure" role="alert">
+              <strong>{failure.title}</strong>
+              <p>{failure.message}</p>
+              <p>{failure.detail}</p>
+              <details>
+                <summary>Technical reason</summary>
+                <code>{failure.reason}</code>
+              </details>
+            </div>
+          )}
+          {answer ? (
+            <div className="answer-layout">
+              <article className="streaming-answer" aria-live="polite">
+                <CitedAnswer
+                  answer={answer}
+                  citations={citations}
+                  onSelect={selectCitation}
+                  selected={selectedCitation}
+                />
+                {events.some((event) => event.type === "final") && (
+                  <button disabled={creatingArtifact} onClick={() => void turnIntoArtifact()}>
+                    {creatingArtifact ? "Creating…" : "Turn into artifact"}
+                  </button>
+                )}
+              </article>
+              <CitationInspector
+                citation={selectedCitation === undefined ? undefined : citations[selectedCitation]}
+                citationNumber={selectedCitation === undefined ? undefined : selectedCitation + 1}
+                evidence={evidence}
+                events={events}
+              />
+            </div>
+          ) : runActive ? (
+            <p className="history-empty">
+              The answer will appear here after Highland finishes collecting and verifying evidence.
+            </p>
+          ) : runCancelled ? (
+            <p className="history-empty">This run was cancelled before an answer was written.</p>
+          ) : !failure ? (
+            <p className="history-empty">This run did not produce an answer.</p>
+          ) : null}
+          {events.length > 0 && <TraceTimeline events={events} />}
+        </section>
+      )}
       <section className="discover-history" aria-labelledby="previous-runs-heading">
         <header>
           <div>
@@ -707,45 +987,6 @@ export function DiscoverWorkspace() {
           </ol>
         )}
       </section>
-      {runExpanded && (answer || events.length > 0) && (
-        <section className="run-output" aria-labelledby="run-output-heading">
-          <header>
-            <div>
-              <p className="eyebrow">Run output</p>
-              <h2 id="run-output-heading">Grounded answer and evidence</h2>
-            </div>
-            <button className="secondary" onClick={() => setRunExpanded(false)} type="button">
-              Collapse output
-            </button>
-          </header>
-          {answer ? (
-            <div className="answer-layout">
-              <article className="streaming-answer" aria-live="polite">
-                <CitedAnswer
-                  answer={answer}
-                  citations={citations}
-                  onSelect={selectCitation}
-                  selected={selectedCitation}
-                />
-                {events.some((event) => event.type === "final") && (
-                  <button disabled={creatingArtifact} onClick={() => void turnIntoArtifact()}>
-                    {creatingArtifact ? "Creating…" : "Turn into artifact"}
-                  </button>
-                )}
-              </article>
-              <CitationInspector
-                citation={selectedCitation === undefined ? undefined : citations[selectedCitation]}
-                citationNumber={selectedCitation === undefined ? undefined : selectedCitation + 1}
-                evidence={evidence}
-                events={events}
-              />
-            </div>
-          ) : (
-            <p className="history-empty">The run is still collecting evidence.</p>
-          )}
-          {events.length > 0 && <TraceTimeline events={events} />}
-        </section>
-      )}
       {artifact && (
         <ArtifactEditor initialArtifact={artifact} onClose={() => setArtifact(undefined)} />
       )}

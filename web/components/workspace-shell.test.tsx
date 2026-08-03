@@ -13,10 +13,10 @@ describe("WorkspaceShell", () => {
   it("shows single-workspace navigation and operational status", () => {
     render(<WorkspaceShell><p>Workspace content</p></WorkspaceShell>);
 
-    for (const label of ["New chat", "Search", "Artifacts", "Agents", "Automations"]) {
+    for (const label of ["Ask Highland", "Source search", "Artifacts", "Agent setup", "Automations"]) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
-    expect(screen.getByRole("link", { name: "Search" })).toHaveAttribute("href", "/search");
+    expect(screen.getByRole("link", { name: "Source search" })).toHaveAttribute("href", "/search");
     expect(screen.getByRole("link", { name: "Artifacts" })).toHaveAttribute(
       "aria-current",
       "page",

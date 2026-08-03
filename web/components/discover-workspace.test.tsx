@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -47,11 +47,13 @@ describe("TraceTimeline", () => {
       />,
     );
     expect(screen.getByText("How Highland reached this answer")).toBeInTheDocument();
-    expect(screen.getByText("Model reasoning step 1")).toBeInTheDocument();
+    expect(screen.getByText("Model decision step 1")).toBeInTheDocument();
+    expect(screen.getByText(/Requested Atlas CRM: get customer/)).toBeInTheDocument();
+    expect(screen.getByText("Requested 1 tool")).toBeInTheDocument();
     expect(screen.getByText("Checked Atlas CRM: get customer")).toBeInTheDocument();
     expect(screen.getByText("Error handled")).toBeInTheDocument();
     expect(screen.getAllByText("Technical details")).toHaveLength(2);
-    expect(screen.getByText(/crm__get_customer/)).toBeInTheDocument();
+    expect(screen.getAllByText(/crm__get_customer/)).toHaveLength(2);
   });
 });
 
@@ -99,13 +101,12 @@ describe("answer evidence", () => {
     );
     expect(screen.getByText("Exact compaction passage.")).toBeInTheDocument();
     expect(screen.getByText("Mutable fact refreshed through MCP")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open canonical source" })).toHaveAttribute(
-      "href",
-      "mock://archive/doc_runbook",
-    );
+    expect(screen.getByText("mock://archive/doc_runbook")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /canonical source/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/not a public website/i)).toBeInTheDocument();
   });
 
-  it("explains tool-backed citation evidence and links its canonical record", () => {
+  it("explains tool-backed citation evidence and opens its record in Highland", () => {
     render(
       <CitationInspector
         citation={{
@@ -141,7 +142,7 @@ describe("answer evidence", () => {
                 items: [{
                   id: "cus_northwind",
                   name: "Northwind Bank",
-                  source_url: "https://atlas.test/customers/cus_northwind",
+                  source_url: "https://atlas.summit.test/customers/cus_northwind",
                 }],
               }),
             },
@@ -154,10 +155,72 @@ describe("answer evidence", () => {
     expect(screen.getByText("Atlas CRM")).toBeInTheDocument();
     expect(screen.getByText("list customers")).toBeInTheDocument();
     expect(screen.getByText("Northwind Bank", { selector: "blockquote" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Open canonical source/ })).toHaveAttribute(
-      "href",
-      "https://atlas.test/customers/cus_northwind",
+    expect(screen.getByText("https://atlas.summit.test/customers/cus_northwind")).toBeInTheDocument();
+    expect(screen.getByText("View source record")).toBeInTheDocument();
+    expect(screen.getByText(/not a public website/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /open external source/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps a genuinely routable source as an external link", () => {
+    render(
+      <EvidencePanel
+        evidence={[{
+          id: "chk_real",
+          source_id: "doc_real",
+          title: "External policy",
+          text: "Policy text.",
+          source_system: "archive",
+          source_type: "policy",
+          source_url: "https://docs.example.com/policy",
+          updated_at: "2026-07-29T00:00:00Z",
+          location: { section: "Policy" },
+        }]}
+        refreshed={false}
+      />,
     );
+    expect(screen.getByRole("link", { name: /Open external source/ })).toHaveAttribute(
+      "href",
+      "https://docs.example.com/policy",
+    );
+  });
+
+  it("shows the complete response when a citation does not identify one list item", () => {
+    render(
+      <CitationInspector
+        citation={{
+          start: 0,
+          end: 19,
+          text: "Two accounts changed",
+          source_ids: [],
+          tool_call_ids: ["call-list"],
+        }}
+        citationNumber={2}
+        evidence={[]}
+        events={[
+          {
+            id: 1,
+            type: "tool_call",
+            timestamp: "2026-07-29T00:00:00Z",
+            payload: { tool_call: { id: "call-list", name: "crm__list_customers", arguments: {} } },
+          },
+          {
+            id: 2,
+            type: "tool_result",
+            timestamp: "2026-07-29T00:00:01Z",
+            payload: {
+              tool_call_id: "call-list",
+              content: JSON.stringify({ items: [{ id: "one" }, { id: "two" }] }),
+            },
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText("Tool response supporting this claim")).toBeInTheDocument();
+    expect(screen.getByText("View supporting tool response")).toBeInTheDocument();
+    expect(screen.getByText(/returned 2 records/i)).toBeInTheDocument();
+    const response = screen.getByText(/"items": \[/).closest("pre");
+    expect(response).toHaveClass("tool-response-json");
+    expect(response?.closest("details")).toHaveClass("tool-response");
   });
 });
 
@@ -292,10 +355,10 @@ describe("DiscoverWorkspace", () => {
     await waitFor(() => expect(FakeEventSource.instance).toBeDefined());
 
     act(() => FakeEventSource.instance?.onerror?.());
-    expect(screen.getByRole("status")).toHaveTextContent("Reconnecting");
+    expect(screen.getByText(/Rejoining the saved run/)).toBeInTheDocument();
     expect(screen.queryByText(/persisted trace can still be replayed/i)).not.toBeInTheDocument();
     act(() => FakeEventSource.instance?.onopen?.());
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Rejoining the saved run/)).not.toBeInTheDocument();
 
     act(() => {
       FakeEventSource.instance?.emit("model_delta", {
@@ -314,5 +377,179 @@ describe("DiscoverWorkspace", () => {
 
     expect(screen.getByText("Meeting response")).toBeInTheDocument();
     expect(screen.getByText("Completed the grounded answer")).toBeInTheDocument();
+  });
+
+  it("creates a fresh model conversation for every discovery", async () => {
+    class FakeEventSource {
+      static instances: FakeEventSource[] = [];
+      listeners = new Map<string, (message: MessageEvent) => void>();
+      onopen: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      constructor(_url: string) {
+        FakeEventSource.instances.push(this);
+      }
+
+      addEventListener(name: string, listener: (message: MessageEvent) => void) {
+        this.listeners.set(name, listener);
+      }
+
+      emit(name: string, event: object) {
+        this.listeners.get(name)?.(new MessageEvent(name, { data: JSON.stringify(event) }));
+      }
+
+      close() {}
+    }
+    vi.stubGlobal("EventSource", FakeEventSource);
+    let conversationNumber = 0;
+    const requestedRunUrls: string[] = [];
+    const conversationBodies: string[] = [];
+    vi.stubGlobal("fetch", vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/runs") && !init?.method) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      if (url.endsWith("/conversations") && init?.method === "POST") {
+        conversationNumber += 1;
+        conversationBodies.push(String(init.body));
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ id: `con-${conversationNumber}` }),
+        });
+      }
+      if (url.includes("/conversations/con-") && url.endsWith("/runs")) {
+        requestedRunUrls.push(url);
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ run_id: `run-${requestedRunUrls.length}` }),
+        });
+      }
+      return Promise.resolve({ ok: false });
+    }));
+    render(<DiscoverWorkspace />);
+
+    const question = screen.getByLabelText("Ask Highland");
+    fireEvent.change(question, { target: { value: "First discovery" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    act(() => FakeEventSource.instances[0].emit("final", {
+      id: 1,
+      type: "final",
+      timestamp: "2026-08-03T22:38:58Z",
+      payload: { content: "First answer" },
+    }));
+
+    fireEvent.change(question, { target: { value: "Second discovery" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(2));
+
+    expect(conversationNumber).toBe(2);
+    expect(conversationBodies.map((body) => JSON.parse(body))).toEqual([
+      { title: "First discovery" },
+      { title: "Second discovery" },
+    ]);
+    expect(requestedRunUrls).toEqual([
+      "http://127.0.0.1:8080/conversations/con-1/runs",
+      "http://127.0.0.1:8080/conversations/con-2/runs",
+    ]);
+  });
+
+  it("puts a live run before history and explains a terminal run failure", async () => {
+    class FakeEventSource {
+      static instance?: FakeEventSource;
+      listeners = new Map<string, (message: MessageEvent) => void>();
+      onopen: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      constructor(_url: string) {
+        FakeEventSource.instance = this;
+      }
+
+      addEventListener(name: string, listener: (message: MessageEvent) => void) {
+        this.listeners.set(name, listener);
+      }
+
+      emit(name: string, event: object) {
+        this.listeners.get(name)?.(new MessageEvent(name, { data: JSON.stringify(event) }));
+      }
+
+      close() {}
+    }
+    vi.stubGlobal("EventSource", FakeEventSource);
+    vi.stubGlobal("fetch", vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/runs") && !init?.method) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      if (url.endsWith("/conversations") && init?.method === "POST") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: "con-1" }) });
+      }
+      if (url.endsWith("/conversations/con-1/runs") && init?.method === "POST") {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ run_id: "run-failed" }) });
+      }
+      return Promise.resolve({ ok: false });
+    }));
+    render(<DiscoverWorkspace />);
+    fireEvent.change(screen.getByLabelText("Ask Highland"), {
+      target: { value: "Prepare the meeting" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start discovery" }));
+
+    await waitFor(() => expect(FakeEventSource.instance).toBeDefined());
+    const outputHeading = screen.getByRole("heading", { name: "Discovery in progress" });
+    const historyHeading = screen.getByRole("heading", { name: "Previous runs" });
+    expect(outputHeading.compareDocumentPosition(historyHeading)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(screen.getByText("Highland is investigating your question")).toBeInTheDocument();
+
+    act(() => {
+      FakeEventSource.instance?.emit("model_call", {
+        id: 1,
+        type: "model_call",
+        timestamp: "2026-08-03T22:38:57Z",
+        payload: { step: 10, finish_reason: "tool_call" },
+      });
+      FakeEventSource.instance?.emit("tool_call", {
+        id: 2,
+        type: "tool_call",
+        timestamp: "2026-08-03T22:38:58Z",
+        payload: {
+          tool_call: {
+            id: "metric-call",
+            name: "observability__query_deployment_metrics",
+            arguments: { customer_id: "cus_northwind", metric: "retrieval_latency_p95" },
+          },
+        },
+      });
+      FakeEventSource.instance?.emit("tool_result", {
+        id: 3,
+        type: "tool_result",
+        timestamp: "2026-08-03T22:38:59Z",
+        payload: {
+          tool_call_id: "metric-call",
+          is_error: true,
+          content: "Beacon returned HTTP 404: Metric not found for customer",
+        },
+      });
+      FakeEventSource.instance?.emit("run_failed", {
+        id: 4,
+        type: "run_failed",
+        timestamp: "2026-08-03T22:39:00Z",
+        payload: { reason: "maximum steps or runtime budget" },
+      });
+    });
+
+    expect(screen.getByRole("heading", { name: "Discovery stopped" })).toBeInTheDocument();
+    const failure = screen.getByRole("alert");
+    expect(within(failure).getByText(/reached its run limit before writing the answer/i)).toBeInTheDocument();
+    expect(within(failure).getByText(/used all 1 available model calls/i)).toBeInTheDocument();
+    expect(within(failure).getByText(/Beacon: query deployment metrics/)).toHaveTextContent(
+      "Metric not found for customer",
+    );
+    expect(screen.getByRole("button", { name: "Start discovery" })).toBeEnabled();
+
+    act(() => FakeEventSource.instance?.onerror?.());
+    expect(screen.queryByText(/Rejoining the saved run/)).not.toBeInTheDocument();
   });
 });
