@@ -29,6 +29,7 @@ from .artifacts import (
     safe_export_filename,
 )
 from .discover.service import ChatRequest, DiscoverFilters, SearchRequest
+from .models.contracts import ModelError
 from .models.provider import ModelProvider
 from .retrieval.citations import CitationResolver
 from .runtime.mcp import MCPGateway
@@ -562,6 +563,15 @@ def register_api_routes(app: FastAPI, services: ApplicationServices) -> None:
     ) -> dict[str, object]:
         run_id = f"run_{uuid4().hex}"
         try:
+            conversation = conversations.get(conversation_id)
+            if conversation.messages:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Discovery runs require a fresh conversation. "
+                        "Create a new conversation before starting another run."
+                    ),
+                )
             message = conversations.append_message(
                 conversation_id,
                 role="user",
@@ -596,10 +606,23 @@ def register_api_routes(app: FastAPI, services: ApplicationServices) -> None:
         try:
             await discover.chat(request, run_id=run_id)
         except Exception as error:  # noqa: BLE001 - persist background failure for the UI
+            payload: dict[str, object] = {
+                "error_type": type(error).__name__,
+                "message": str(error),
+            }
+            if isinstance(error, ModelError):
+                payload.update(
+                    {
+                        "code": error.code,
+                        "provider": error.provider,
+                        "request_id": error.request_id,
+                        "retryable": error.retryable,
+                    }
+                )
             run_events.append(
                 run_id,
                 "error",
-                {"error_type": type(error).__name__, "message": str(error)},
+                payload,
             )
 
     @discover_routes.post("/runs/{run_id}/cancel", status_code=status.HTTP_202_ACCEPTED)

@@ -42,3 +42,17 @@ from highland_mocks.mcp_server import build_mcp
 async def test_connector_exposes_only_its_atomic_tools(connector: str, expected: set[str]) -> None:
     tools = await build_mcp(connector).list_tools()
     assert {tool.name for tool in tools} == expected
+
+
+@pytest.mark.asyncio
+async def test_observability_metric_tool_advertises_exact_metric_names() -> None:
+    tools = await build_mcp("observability").list_tools()
+    query = next(tool for tool in tools if tool.name == "query_deployment_metrics")
+
+    assert query.inputSchema["properties"]["metric"]["enum"] == [
+        "retrieval.p95_ms",
+        "retrieval.p50_ms",
+        "retrieval.error_rate",
+        "retrieval.shard_3.memory_utilization",
+        "retrieval.queries_per_second",
+    ]

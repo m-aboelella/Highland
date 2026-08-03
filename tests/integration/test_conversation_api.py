@@ -44,6 +44,21 @@ def test_run_is_tied_to_message_and_replayable_sse(tmp_path: Path) -> None:
         assert conversation["messages"][0]["run_id"] == run["run_id"]
         assert "event: run_started" in client.get(run["events_url"]).text
 
+        repeated = client.post(
+            f"/conversations/{conversation_id}/runs",
+            json={"content": "Prepare another meeting."},
+        )
+        assert repeated.status_code == 409
+        assert "require a fresh conversation" in repeated.json()["detail"]
+
+        fresh_conversation_id = client.post("/conversations").json()["id"]
+        fresh = client.post(
+            f"/conversations/{fresh_conversation_id}/runs",
+            json={"content": "Prepare another meeting."},
+        )
+        assert fresh.status_code == 202
+        assert fresh.json()["conversation_id"] == fresh_conversation_id
+
 
 def test_delete_only_removes_conversation(tmp_path: Path) -> None:
     source = tmp_path / "indexes" / "search" / "chunks.jsonl"

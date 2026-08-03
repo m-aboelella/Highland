@@ -207,13 +207,34 @@ def _provider_error(error: Exception) -> ModelError:
         code = "invalid_request"
     else:
         code = "provider_error"
+    detail = _provider_error_detail(error) if code == "invalid_request" else None
+    message = f"Cohere request failed ({code})"
+    if detail:
+        message = f"{message}: {detail}"
+    headers = getattr(error, "headers", None)
+    request_id = getattr(error, "request_id", None)
+    if request_id is None and isinstance(headers, dict):
+        request_id = headers.get("x-request-id")
     return ModelError(
-        f"Cohere request failed ({code})",
+        message,
         code=code,
         retryable=retryable,
         provider="cohere",
-        request_id=getattr(error, "request_id", None),
+        request_id=request_id,
     )
+
+
+def _provider_error_detail(error: Exception) -> str | None:
+    body = getattr(error, "body", None)
+    if isinstance(body, dict):
+        detail = body.get("message") or body.get("detail")
+    elif isinstance(body, str):
+        detail = body
+    else:
+        detail = None
+    if not isinstance(detail, str) or not detail.strip():
+        return None
+    return " ".join(detail.split())[:500]
 
 
 class _CohereBase:

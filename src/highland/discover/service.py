@@ -10,14 +10,38 @@ from highland.models.provider import ModelProvider
 from highland.retrieval.faiss_store import EmbeddingIndex, FaissStore, VectorIndexError
 from highland.retrieval.hybrid import HybridRetriever, RetrievalFilters, RetrievalResponse
 from highland.retrieval.sync import load_chunks
-from highland.runtime.agent import AgentLoop, AgentProfile, RunOutcome, RunRepository
+from highland.runtime.agent import AgentLoop, AgentProfile, RunOutcome, RunRepository, RunStatus
 from highland.runtime.approvals import ApprovalStore
 from highland.runtime.cancellation import RunCancellationStore
 from highland.runtime.events import RunEventStore
 from highland.runtime.mcp import MCPGateway
 from highland.runtime.policy import RunScope, ToolRegistry
 
-from .conversations import ConversationStore, SourceReference
+from .conversations import ConversationMessage, ConversationStore, SourceReference
+
+
+def _completed_prior_messages(
+    messages: list[ConversationMessage],
+    *,
+    current_run_id: str,
+) -> list[Message]:
+    """Keep only complete, non-empty exchanges from earlier runs."""
+    roles_by_run: dict[str, set[str]] = {}
+    for message in messages:
+        if message.run_id and message.run_id != current_run_id and message.content.strip():
+            roles_by_run.setdefault(message.run_id, set()).add(message.role)
+    completed_runs = {
+        run_id
+        for run_id, roles in roles_by_run.items()
+        if {MessageRole.USER.value, MessageRole.ASSISTANT.value} <= roles
+    }
+    return [
+        Message(role=MessageRole(message.role), content=message.content)
+        for message in messages
+        if message.run_id in completed_runs
+        and message.role in {MessageRole.USER.value, MessageRole.ASSISTANT.value}
+        and message.content.strip()
+    ]
 
 
 class DiscoverModel(BaseModel):
@@ -96,12 +120,7 @@ class DiscoverService:
             request.conversation_id,
             max_chars=self.profile.budgets.max_context_chars,
         )
-        prior_messages = [
-            Message(role=MessageRole(message.role), content=message.content)
-            for message in prior
-            if message.role in {MessageRole.USER.value, MessageRole.ASSISTANT.value}
-            and message.run_id != run_id
-        ]
+        prior_messages = _completed_prior_messages(prior, current_run_id=run_id)
         documents = [
             Document(
                 id=result.chunk.id,
@@ -193,13 +212,14 @@ class DiscoverService:
         sources = [
             sources_by_chunk[source_id] for source_id in cited if source_id in sources_by_chunk
         ]
-        self.conversations.append_message(
-            request.conversation_id,
-            role="assistant",
-            content=outcome.content,
-            run_id=run_id,
-            sources=sources,
-        )
+        if outcome.status is RunStatus.COMPLETED and outcome.content.strip():
+            self.conversations.append_message(
+                request.conversation_id,
+                role="assistant",
+                content=outcome.content,
+                run_id=run_id,
+                sources=sources,
+            )
         return outcome
 
 

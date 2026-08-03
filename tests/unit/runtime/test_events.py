@@ -43,6 +43,14 @@ def test_replay_after_event_id_has_no_duplicates(tmp_path) -> None:
     assert [event.id for event in store.replay("run", after_id=2)] == [3]
 
 
+def test_error_event_marks_run_as_failed(tmp_path) -> None:
+    store = RunEventStore(tmp_path)
+    store.append("run", EventType.RUN_STARTED, {})
+    store.append("run", EventType.ERROR, {"message": "provider rejected request"})
+
+    assert store.summary("run")["status"] == "failed"
+
+
 def test_list_summaries_returns_latest_first_with_history_metadata(tmp_path) -> None:
     store = RunEventStore(tmp_path)
     store.append(

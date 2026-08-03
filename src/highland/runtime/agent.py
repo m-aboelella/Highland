@@ -149,6 +149,9 @@ class AgentLoop:
                     "type": "model_call",
                     "step": step,
                     "finish_reason": response.finish_reason.value,
+                    "tool_calls": [
+                        call.model_dump(mode="json") for call in response.message.tool_calls
+                    ],
                     "usage": response.usage.model_dump(mode="json"),
                 }
             )
@@ -326,6 +329,7 @@ class AgentLoop:
                 "type": "model_call",
                 "step": "resume",
                 "finish_reason": response.finish_reason.value,
+                "tool_calls": [],
                 "usage": response.usage.model_dump(mode="json"),
             }
         )

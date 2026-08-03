@@ -161,6 +161,8 @@ def _status(events: list[RunEvent]) -> str:
         return "cancelled"
     if EventType.RUN_FAILED in types:
         return "failed"
+    if EventType.ERROR in types:
+        return "failed"
     if EventType.RUN_COMPLETED in types or EventType.FINAL in types:
         return "completed"
     if EventType.APPROVAL_REQUIRED in types:

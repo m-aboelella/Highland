@@ -97,6 +97,8 @@ async def test_one_and_multiple_read_tools_are_returned_to_model_and_trace(tmp_p
     assert len(model.requests[1].messages[-1].tool_results) == 2
     state = RunRepository(tmp_path).load("tools")
     assert len([event for event in state["events"] if event["type"] == "tool_result"]) == 2
+    decision = next(event for event in state["events"] if event["type"] == "model_call")
+    assert decision["tool_calls"] == [call.model_dump(mode="json") for call in calls]
 
 
 @pytest.mark.asyncio

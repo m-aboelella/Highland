@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException
 from mcp.server.fastmcp import FastMCP
@@ -17,6 +17,14 @@ from .common import (
 )
 
 META = {"dataset_version": "2026.07.29.1", "as_of": "2026-07-29T12:00:00Z"}
+
+MetricName = Literal[
+    "retrieval.p95_ms",
+    "retrieval.p50_ms",
+    "retrieval.error_rate",
+    "retrieval.shard_3.memory_utilization",
+    "retrieval.queries_per_second",
+]
 
 
 def seed_fragment() -> dict[str, Any]:
@@ -262,10 +270,10 @@ def register_tools(mcp: FastMCP, client: SourceClient) -> None:
     @mcp.tool()
     def query_deployment_metrics(
         customer_id: str,
-        metric: str,
+        metric: MetricName,
         time_range: str = "24h",
     ) -> dict[str, Any]:
-        """Query a customer metric over 1h, 6h, 12h, 24h, 48h, or 7d."""
+        """Query one exact available metric over 1h, 6h, 12h, 24h, 48h, or 7d."""
         return client.post(
             "/metrics/query",
             {

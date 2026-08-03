@@ -52,3 +52,24 @@ def test_sse_waits_for_events_appended_after_connection(tmp_path) -> None:
     ]
     assert [event["type"] for event in data] == ["model_delta", "final"]
     assert response.headers["cache-control"] == "no-cache"
+
+
+def test_sse_closes_cleanly_after_run_failed(tmp_path) -> None:
+    settings = HighlandSettings(workspace_dir=tmp_path)
+    store = RunEventStore(tmp_path / "runs" / "events")
+    store.append("run-failed", EventType.RUN_STARTED, {})
+    store.append(
+        "run-failed",
+        EventType.RUN_FAILED,
+        {"reason": "maximum steps or runtime budget"},
+    )
+
+    with TestClient(create_app(settings)) as client:
+        response = client.get("/runs/run-failed/events")
+
+    data = [
+        json.loads(line.removeprefix("data: "))
+        for line in response.text.splitlines()
+        if line.startswith("data: ")
+    ]
+    assert [event["type"] for event in data] == ["run_started", "run_failed"]

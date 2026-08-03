@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import cohere
 import httpx
 import pytest
 from cohere.types import (
@@ -32,6 +33,7 @@ from highland.models.contracts import (
     InputType,
     Message,
     MessageRole,
+    ModelError,
     RerankRequest,
     ToolDefinition,
     ToolResult,
@@ -189,6 +191,24 @@ async def test_transient_chat_retry_keeps_one_logical_call_id() -> None:
 
     assert len(client.chat_calls) == 2
     assert result.metadata.logical_call_id == "logical_1"
+
+
+@pytest.mark.asyncio
+async def test_invalid_request_preserves_safe_provider_detail_and_request_id() -> None:
+    class RejectingClient:
+        async def chat(self, **_kwargs):
+            raise cohere.BadRequestError(
+                body={"message": "message must not be empty in a turn"},
+                headers={"x-request-id": "req_invalid"},
+            )
+
+    provider = CohereChatModel(RejectingClient(), model="command-a-plus-05-2026")
+
+    with pytest.raises(ModelError, match="message must not be empty in a turn") as failure:
+        await provider.chat(request())
+
+    assert failure.value.code == "invalid_request"
+    assert failure.value.request_id == "req_invalid"
 
 
 @pytest.mark.asyncio
