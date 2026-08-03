@@ -312,6 +312,144 @@ describe("DiscoverWorkspace", () => {
     expect(previousRun).toHaveAttribute("aria-expanded", "false");
   });
 
+  it("creates an artifact from a restored discovery and opens the editor", async () => {
+    const trace = [{
+      id: 1,
+      type: "final",
+      timestamp: "2026-08-03T22:38:57Z",
+      payload: { content: "Northwind needs a capacity review." },
+    }];
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/runs") && !init?.method) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([{
+            run_id: "run-artifact",
+            status: "completed",
+            event_count: 1,
+            last_event_id: 1,
+            conversation_id: "con-artifact",
+            prompt: "Prepare the Northwind meeting",
+          }]),
+        });
+      }
+      if (url.endsWith("/runs/run-artifact/summary")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            run_id: "run-artifact",
+            status: "completed",
+            final: { content: "Northwind needs a capacity review." },
+          }),
+        });
+      }
+      if (url.endsWith("/runs/run-artifact/trace")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(trace) });
+      }
+      if (url.endsWith("/conversations/con-artifact")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            messages: [{ id: "msg-answer", role: "assistant", run_id: "run-artifact" }],
+          }),
+        });
+      }
+      if (url.endsWith("/artifacts/generate") && init?.method === "POST") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            id: "art-1",
+            title: "Northwind briefing",
+            artifact_type: "briefing",
+            content: "## Capacity\n\nReview capacity.",
+            citations: [],
+            revision: 1,
+            conversation_id: "con-artifact",
+            run_id: "run-artifact",
+            message_id: "msg-answer",
+            updated_at: "2026-08-03T22:39:00Z",
+          }),
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<DiscoverWorkspace />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Prepare the Northwind meeting/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Turn into artifact" }));
+
+    expect(await screen.findByRole("region", { name: "Artifact editor" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Northwind briefing" })).toBeInTheDocument();
+    const generationCall = fetchMock.mock.calls.find(([input, init]) => (
+      String(input).endsWith("/artifacts/generate") && init?.method === "POST"
+    ));
+    expect(JSON.parse(String(generationCall?.[1]?.body))).toEqual({
+      artifact_type: "briefing",
+      conversation_id: "con-artifact",
+      message_id: "msg-answer",
+    });
+  });
+
+  it("shows artifact generation errors beside the action", async () => {
+    const trace = [{
+      id: 1,
+      type: "final",
+      timestamp: "2026-08-03T22:38:57Z",
+      payload: { content: "Northwind needs a capacity review." },
+    }];
+    vi.stubGlobal("fetch", vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/runs") && !init?.method) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([{
+            run_id: "run-artifact",
+            status: "completed",
+            event_count: 1,
+            last_event_id: 1,
+            conversation_id: "con-artifact",
+            prompt: "Prepare the Northwind meeting",
+          }]),
+        });
+      }
+      if (url.endsWith("/runs/run-artifact/summary")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ status: "completed", final: trace[0].payload }),
+        });
+      }
+      if (url.endsWith("/runs/run-artifact/trace")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(trace) });
+      }
+      if (url.endsWith("/conversations/con-artifact")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            messages: [{ id: "msg-answer", role: "assistant", run_id: "run-artifact" }],
+          }),
+        });
+      }
+      if (url.endsWith("/artifacts/generate") && init?.method === "POST") {
+        return Promise.resolve({
+          ok: false,
+          json: () => Promise.resolve({ detail: "Artifact generation model is unavailable." }),
+        });
+      }
+      return Promise.resolve({ ok: false });
+    }));
+    render(<DiscoverWorkspace />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Prepare the Northwind meeting/ }));
+    const create = await screen.findByRole("button", { name: "Turn into artifact" });
+    fireEvent.click(create);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Artifact generation model is unavailable.");
+    expect(create.parentElement).toContainElement(alert);
+  });
+
   it("reconnects an interrupted live stream and renders its final output", async () => {
     class FakeEventSource {
       static instance?: FakeEventSource;

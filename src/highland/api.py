@@ -373,6 +373,11 @@ def register_api_routes(app: FastAPI, services: ApplicationServices) -> None:
             )
         except ArtifactGenerationError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
+        except ModelError as error:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Artifact generation model failed: {error}",
+            ) from error
         return artifact.model_dump(mode="json")
 
     @artifact_routes.get("/artifacts")
@@ -394,6 +399,11 @@ def register_api_routes(app: FastAPI, services: ApplicationServices) -> None:
             raise HTTPException(status_code=404, detail="Artifact not found") from None
         except EvidenceCoverageError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
+        except ModelError as error:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Evidence coverage model failed: {error}",
+            ) from error
         return report.model_dump(mode="json")
 
     @artifact_routes.get("/artifacts/{artifact_id}/export.md")
@@ -451,6 +461,11 @@ def register_api_routes(app: FastAPI, services: ApplicationServices) -> None:
             raise HTTPException(status_code=404, detail="Artifact not found") from None
         except ArtifactGenerationError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
+        except ModelError as error:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Artifact revision model failed: {error}",
+            ) from error
         return preview.model_dump(mode="json")
 
     @artifact_routes.delete("/artifacts/{artifact_id}", status_code=status.HTTP_204_NO_CONTENT)

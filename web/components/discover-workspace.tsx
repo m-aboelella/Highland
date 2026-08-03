@@ -576,6 +576,7 @@ export function DiscoverWorkspace() {
   const [selectedCitation, setSelectedCitation] = useState<number>();
   const [artifact, setArtifact] = useState<ArtifactDocument>();
   const [creatingArtifact, setCreatingArtifact] = useState(false);
+  const [artifactError, setArtifactError] = useState<string>();
   const source = useRef<EventSource>(null);
   const runOutputRef = useRef<HTMLElement>(null);
   const receivedEventIds = useRef(new Set<number>());
@@ -672,6 +673,7 @@ export function DiscoverWorkspace() {
     setStreamNotice(undefined);
     setSelectedCitation(undefined);
     setArtifact(undefined);
+    setArtifactError(undefined);
     try {
       const [summaryResponse, traceResponse] = await Promise.all([
         fetch(`${API}/runs/${run.run_id}/summary`),
@@ -716,6 +718,7 @@ export function DiscoverWorkspace() {
     setSelectedCitation(undefined);
     setRunExpanded(true);
     setArtifact(undefined);
+    setArtifactError(undefined);
     receivedEventIds.current = new Set();
     source.current?.close();
     setLiveRunId(undefined);
@@ -813,6 +816,7 @@ export function DiscoverWorkspace() {
   async function turnIntoArtifact() {
     if (!runConversationId || !runId) return;
     setCreatingArtifact(true);
+    setArtifactError(undefined);
     try {
       const conversationResponse = await fetch(`${API}/conversations/${runConversationId}`);
       if (!conversationResponse.ok) throw new Error("The completed conversation could not be loaded.");
@@ -832,11 +836,15 @@ export function DiscoverWorkspace() {
           message_id: message.id,
         }),
       });
-      if (!response.ok) throw new Error("Artifact could not be generated.");
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({})) as { detail?: string };
+        throw new Error(payload.detail ?? "Artifact could not be generated.");
+      }
       setArtifact((await response.json()) as ArtifactDocument);
-      setError(undefined);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Artifact could not be generated.");
+      setArtifactError(
+        caught instanceof Error ? caught.message : "Artifact could not be generated.",
+      );
     } finally {
       setCreatingArtifact(false);
     }
@@ -921,9 +929,12 @@ export function DiscoverWorkspace() {
                   selected={selectedCitation}
                 />
                 {events.some((event) => event.type === "final") && (
-                  <button disabled={creatingArtifact} onClick={() => void turnIntoArtifact()}>
-                    {creatingArtifact ? "Creating…" : "Turn into artifact"}
-                  </button>
+                  <div className="artifact-create-action">
+                    <button disabled={creatingArtifact} onClick={() => void turnIntoArtifact()}>
+                      {creatingArtifact ? "Creating…" : "Turn into artifact"}
+                    </button>
+                    {artifactError && <p className="form-error" role="alert">{artifactError}</p>}
+                  </div>
                 )}
               </article>
               <CitationInspector

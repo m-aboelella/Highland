@@ -49,6 +49,23 @@ _TRANSIENT_ERRORS = (
     httpx.NetworkError,
 )
 
+# Cohere Structured Outputs supports the shape-bearing parts of JSON Schema,
+# but not every validation keyword emitted by Pydantic. Highland still applies
+# the complete Pydantic model after generation, so these constraints remain
+# enforced locally even though they cannot be sent to the provider.
+_UNSUPPORTED_RESPONSE_SCHEMA_KEYS = {
+    "exclusiveMaximum",
+    "exclusiveMinimum",
+    "maxItems",
+    "maxLength",
+    "maximum",
+    "minItems",
+    "minLength",
+    "minimum",
+    "uniqueItems",
+}
+_UNSUPPORTED_PATTERN_TOKENS = ("^", "$", "?=", "?!")
+
 
 def _usage(value: Any) -> Usage:
     if value is None:
@@ -76,6 +93,32 @@ def _content_text(content: Any) -> str:
         for item in (content or [])
         if getattr(item, "type", None) == "text" and getattr(item, "text", None)
     )
+
+
+def _cohere_response_schema(value: Any) -> Any:
+    if isinstance(value, dict):
+        normalized = {
+            key: _cohere_response_schema(item)
+            for key, item in value.items()
+            if key not in _UNSUPPORTED_RESPONSE_SCHEMA_KEYS
+            and not (
+                key == "pattern"
+                and isinstance(item, str)
+                and any(token in item for token in _UNSUPPORTED_PATTERN_TOKENS)
+            )
+        }
+        properties = normalized.get("properties")
+        if (
+            normalized.get("type") == "object"
+            and isinstance(properties, dict)
+            and properties
+            and not normalized.get("required")
+        ):
+            normalized["required"] = [next(iter(properties))]
+        return normalized
+    if isinstance(value, list):
+        return [_cohere_response_schema(item) for item in value]
+    return value
 
 
 def _tool_call(value: Any) -> ToolCall:
@@ -184,7 +227,7 @@ def _chat_arguments(request: ChatRequest, model: str) -> dict[str, Any]:
     if request.response_schema is not None:
         arguments["response_format"] = {
             "type": "json_object",
-            "json_schema": request.response_schema,
+            "json_schema": _cohere_response_schema(request.response_schema),
         }
     if request.max_tokens is not None:
         arguments["max_tokens"] = request.max_tokens

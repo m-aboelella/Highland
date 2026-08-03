@@ -117,6 +117,84 @@ async def test_preserves_model_weak_assessment_after_validating_mapping() -> Non
 
 
 @pytest.mark.asyncio
+async def test_repairs_drifted_offsets_for_a_unique_exact_claim() -> None:
+    report = await EvidenceCoverageChecker(
+        ScriptedChatModel(
+            [
+                response(
+                    [{
+                        "text": "Latency reached 800 ms.",
+                        "start": 1,
+                        "end": len("Latency reached 800 ms.") + 1,
+                        "citation_ids": ["E1"],
+                        "model_assessment": "supported",
+                    }]
+                )
+            ]
+        )
+    ).check(artifact())
+
+    assert (report.claims[0].start, report.claims[0].end) == (
+        0,
+        len("Latency reached 800 ms."),
+    )
+
+
+@pytest.mark.asyncio
+async def test_maps_known_source_ids_back_to_artifact_evidence_labels() -> None:
+    report = await EvidenceCoverageChecker(
+        ScriptedChatModel(
+            [
+                response(
+                    [{
+                        "text": "Latency reached 800 ms.",
+                        "start": 0,
+                        "end": len("Latency reached 800 ms."),
+                        "citation_ids": ["metric_1"],
+                        "model_assessment": "supported",
+                    }]
+                )
+            ]
+        )
+    ).check(artifact())
+
+    assert report.claims[0].citation_ids == ["E1"]
+    assert report.claims[0].status is ClaimSupport.SUPPORTED
+
+
+@pytest.mark.asyncio
+async def test_omits_non_artifact_proposals_when_exact_claims_remain() -> None:
+    content = artifact().content
+    report = await EvidenceCoverageChecker(
+        ScriptedChatModel(
+            [
+                response(
+                    [
+                        {
+                            "text": "This came from evidence, not the artifact.",
+                            "start": 0,
+                            "end": len("This came from evidence, not the artifact."),
+                            "citation_ids": ["E1"],
+                            "model_assessment": "supported",
+                        },
+                        {
+                            "text": "Latency reached 800 ms.",
+                            "start": 0,
+                            "end": content.index(".") + 1,
+                            "citation_ids": ["E1"],
+                            "model_assessment": "supported",
+                        },
+                    ]
+                )
+            ]
+        )
+    ).check(artifact())
+
+    assert [claim.text for claim in report.claims] == ["Latency reached 800 ms."]
+    assert "1 malformed model proposal was omitted" in report.advisory
+
+
+@pytest.mark.asyncio
 async def test_rejects_invented_citation_ids_and_invalid_spans() -> None:
     bad_id = response(
         [{
@@ -132,12 +210,12 @@ async def test_rejects_invented_citation_ids_and_invalid_spans() -> None:
 
     bad_span = response(
         [{
-            "text": "Latency reached 800 ms.",
+            "text": "This claim is not in the artifact.",
             "start": 1,
-            "end": len("Latency reached 800 ms.") + 1,
+            "end": len("This claim is not in the artifact.") + 1,
             "citation_ids": ["E1"],
             "model_assessment": "supported",
         }]
     )
-    with pytest.raises(EvidenceCoverageError, match="Invalid span"):
+    with pytest.raises(EvidenceCoverageError, match="did not return any exact artifact claims"):
         await EvidenceCoverageChecker(ScriptedChatModel([bad_span])).check(artifact())

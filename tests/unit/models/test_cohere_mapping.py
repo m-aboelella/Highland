@@ -24,7 +24,12 @@ from cohere.types import Citation as CohereCitation
 from cohere.types import Usage as CohereUsage
 from cohere.v2.types import V2ChatResponse, V2RerankResponse, V2RerankResponseResultsItem
 
-from highland.models.cohere import CohereChatModel, CohereEmbeddingModel, CohereRerankModel
+from highland.models.cohere import (
+    CohereChatModel,
+    CohereEmbeddingModel,
+    CohereRerankModel,
+    _chat_arguments,
+)
 from highland.models.contracts import (
     ChatRequest,
     Document,
@@ -157,6 +162,52 @@ def request() -> ChatRequest:
         documents=[Document(id="doc_1", text="ticket evidence", metadata={"visibility": "internal"})],
         logical_call_id="logical_1",
     )
+
+
+def test_structured_output_schema_removes_only_unsupported_validation_keywords() -> None:
+    structured_request = request().model_copy(
+        update={
+            "response_schema": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "minLength": 1, "maxLength": 300},
+                    "sections": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "heading": {
+                                    "type": "string",
+                                    "pattern": "^(summary|details)$",
+                                },
+                                "priority": {"type": "integer", "minimum": 1},
+                            },
+                            "required": ["heading", "priority"],
+                        },
+                    },
+                    "notes": {
+                        "type": "object",
+                        "properties": {"text": {"type": "string"}},
+                    },
+                },
+                "required": ["title", "sections"],
+            }
+        }
+    )
+
+    schema = _chat_arguments(
+        structured_request, "command-a-plus-05-2026"
+    )["response_format"]["json_schema"]
+
+    assert schema["required"] == ["title", "sections"]
+    assert schema["properties"]["notes"]["required"] == ["text"]
+    assert schema["properties"]["title"] == {"type": "string"}
+    assert "minItems" not in schema["properties"]["sections"]
+    heading = schema["properties"]["sections"]["items"]["properties"]["heading"]
+    assert heading == {"type": "string"}
+    priority = schema["properties"]["sections"]["items"]["properties"]["priority"]
+    assert priority == {"type": "integer"}
 
 
 @pytest.mark.asyncio

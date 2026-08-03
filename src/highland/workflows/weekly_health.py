@@ -4,7 +4,7 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -26,7 +26,7 @@ class HealthModel(BaseModel):
 
 
 class HealthClassification(HealthModel):
-    classification: str = Field(pattern=r"^(healthy|watch|at_risk)$")
+    classification: Literal["healthy", "watch", "at_risk"]
     rationale: str = Field(min_length=1)
     evidence_ids: list[str] = Field(default_factory=list)
 

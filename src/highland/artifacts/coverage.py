@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -30,7 +32,7 @@ class ProposedClaim(CoverageModel):
     start: int = Field(ge=0)
     end: int = Field(gt=0)
     citation_ids: list[str] = Field(default_factory=list)
-    model_assessment: str = Field(pattern="^(supported|weak|unsupported)$")
+    model_assessment: Literal["supported", "weak", "unsupported"]
 
     @model_validator(mode="after")
     def end_follows_start(self) -> ProposedClaim:
@@ -50,6 +52,11 @@ class ClaimSupport(StrEnum):
     STALE = "stale"
 
 
+_COVERAGE_ADVISORY = (
+    "Coverage labels are model-assisted review signals, not mathematical guarantees."
+)
+
+
 class CheckedClaim(CoverageModel):
     text: str
     start: int
@@ -64,9 +71,7 @@ class EvidenceCoverageReport(CoverageModel):
     artifact_revision: int
     checked_at: datetime
     claims: list[CheckedClaim]
-    advisory: str = (
-        "Coverage labels are model-assisted review signals, not mathematical guarantees."
-    )
+    advisory: str = _COVERAGE_ADVISORY
 
 
 COVERAGE_SCHEMA = ProposedCoverage.model_json_schema()
@@ -121,27 +126,67 @@ class EvidenceCoverageChecker:
         except ValidationError as error:
             raise EvidenceCoverageError(f"Invalid structured claim extraction: {error}") from error
         citations = {citation.id: citation for citation in artifact.citations}
+        citation_aliases = {
+            alias: citation.id
+            for citation in artifact.citations
+            for alias in (citation.source_id, citation.source_url)
+            if alias
+        }
         checked: list[CheckedClaim] = []
+        omitted_claims = 0
         for claim in proposed.claims:
-            if claim.end > len(artifact.content) or artifact.content[claim.start : claim.end] != claim.text:
-                raise EvidenceCoverageError(f"Invalid span for claim: {claim.text}")
+            claim = claim.model_copy(
+                update={
+                    "citation_ids": [
+                        citation_aliases.get(citation_id, citation_id)
+                        for citation_id in claim.citation_ids
+                    ]
+                }
+            )
             unknown = [citation_id for citation_id in claim.citation_ids if citation_id not in citations]
             if unknown:
                 raise EvidenceCoverageError(f"Unknown evidence IDs: {', '.join(unknown)}")
+            try:
+                start, end = _claim_span(artifact.content, claim)
+            except EvidenceCoverageError:
+                omitted_claims += 1
+                continue
             status, explanation = _support_status(claim, citations, now, self.stale_after)
+            payload = claim.model_dump(exclude={"model_assessment"})
+            payload.update(start=start, end=end)
             checked.append(
                 CheckedClaim(
-                    **claim.model_dump(exclude={"model_assessment"}),
+                    **payload,
                     status=status,
                     explanation=explanation,
                 )
+            )
+        if proposed.claims and not checked:
+            raise EvidenceCoverageError("Model did not return any exact artifact claims")
+        advisory = _COVERAGE_ADVISORY
+        if omitted_claims:
+            proposal_label = "proposal was" if omitted_claims == 1 else "proposals were"
+            advisory += (
+                f" {omitted_claims} malformed model {proposal_label} omitted because the text "
+                "did not occur exactly in this artifact."
             )
         return EvidenceCoverageReport(
             artifact_id=artifact.id,
             artifact_revision=artifact.revision,
             checked_at=now,
             claims=checked,
+            advisory=advisory,
         )
+
+
+def _claim_span(content: str, claim: ProposedClaim) -> tuple[int, int]:
+    if claim.end <= len(content) and content[claim.start : claim.end] == claim.text:
+        return claim.start, claim.end
+    matches = list(re.finditer(re.escape(claim.text), content))
+    if len(matches) != 1:
+        raise EvidenceCoverageError(f"Invalid span for claim: {claim.text}")
+    match = matches[0]
+    return match.start(), match.end()
 
 
 def _support_status(
