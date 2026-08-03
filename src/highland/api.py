@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from uuid import uuid4
 
 from fastapi import (
@@ -9,6 +10,7 @@ from fastapi import (
     FastAPI,
     Header,
     HTTPException,
+    Request,
     Response,
     status,
 )
@@ -680,6 +682,10 @@ def register_api_routes(app: FastAPI, services: ApplicationServices) -> None:
     async def run_summary(run_id: str) -> dict[str, object]:
         return run_events.summary(run_id)
 
+    @discover_routes.get("/runs")
+    async def list_runs() -> list[dict[str, object]]:
+        return run_events.list_summaries()
+
     @discover_routes.get("/runs/{run_id}/trace")
     async def run_trace(run_id: str) -> list[dict[str, object]]:
         return [event.model_dump(mode="json") for event in run_events.replay(run_id)]
@@ -718,13 +724,42 @@ def register_api_routes(app: FastAPI, services: ApplicationServices) -> None:
     @discover_routes.get("/runs/{run_id}/events")
     async def stream_run_events(
         run_id: str,
+        request: Request,
         last_event_id: int = Header(default=0, alias="Last-Event-ID"),
     ) -> StreamingResponse:
-        async def stream():
-            for event in run_events.replay(run_id, after_id=last_event_id):
-                yield run_events.sse(event)
+        if run_events.summary(run_id)["status"] == "missing":
+            raise HTTPException(status_code=404, detail="Run not found")
 
-        return StreamingResponse(stream(), media_type="text/event-stream")
+        async def stream():
+            cursor = last_event_id
+            heartbeat_at = asyncio.get_running_loop().time()
+            terminal_types = {"error", "final", "run_cancelled", "run_completed", "run_failed"}
+            while True:
+                if await request.is_disconnected():
+                    return
+                events = run_events.replay(run_id, after_id=cursor)
+                for event in events:
+                    cursor = event.id
+                    yield run_events.sse(event)
+                    if event.type.value in terminal_types:
+                        return
+                summary = run_events.summary(run_id)
+                if (
+                    summary["status"] in {"completed", "failed", "cancelled"}
+                    and cursor >= int(summary["last_event_id"])
+                ):
+                    return
+                now = asyncio.get_running_loop().time()
+                if now - heartbeat_at >= 15:
+                    yield ": keep-alive\n\n"
+                    heartbeat_at = now
+                await asyncio.sleep(0.1)
+
+        return StreamingResponse(
+            stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     app.include_router(discover_routes)
     app.include_router(artifact_routes)

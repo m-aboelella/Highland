@@ -46,6 +46,30 @@ Review the small learning-budget defaults shown in `.env.example` and set a
 provider-side spending limit before experimenting. Re-running `./bootstrap.sh`
 is safe: unchanged mock content is not embedded again.
 
+### Access from a remote VPS
+
+When Highland is running on a VPS, create an SSH tunnel from your local machine
+instead of exposing the web and API ports directly to the internet:
+
+```bash
+ssh -N \
+  -L 127.0.0.1:3000:127.0.0.1:3000 \
+  -L 127.0.0.1:8080:127.0.0.1:8080 \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=60 \
+  USER@VPS_IP
+```
+
+Replace `USER@VPS_IP` with the same SSH destination and identity options you
+normally use for the VPS. Keep the tunnel terminal open, then visit
+<http://localhost:3000> on your local machine. The API documentation is
+available at <http://localhost:8080/docs>. Both ports are forwarded because the
+browser frontend calls the Highland API; the mock-service ports do not need to
+be forwarded. Press `Ctrl+C` to close the tunnel.
+
+For tunnel-only access, allow SSH through the VPS or provider firewall and block
+public inbound access to the application and mock-service ports.
+
 To see the same setup without a real model or API key, use deterministic
 scripted mode:
 

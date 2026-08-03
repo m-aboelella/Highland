@@ -87,16 +87,49 @@ class RunEventStore:
 
     def summary(self, run_id: str) -> dict[str, Any]:
         events = self.replay(run_id)
+        return self._summary(run_id, events)
+
+    def list_summaries(self) -> list[dict[str, Any]]:
+        if not self.directory.exists():
+            return []
+        summaries = []
+        for path in self.directory.glob("*.events.jsonl"):
+            run_id = path.name.removesuffix(".events.jsonl")
+            events = self.replay(run_id)
+            if events:
+                summaries.append(self._summary(run_id, events))
+        return sorted(
+            summaries,
+            key=lambda item: str(item["updated_at"]),
+            reverse=True,
+        )
+
+    def _summary(self, run_id: str, events: list[RunEvent]) -> dict[str, Any]:
         final = next(
             (event for event in reversed(events) if event.type is EventType.FINAL),
             None,
         )
+        started = next(
+            (event for event in events if event.type is EventType.RUN_STARTED),
+            None,
+        )
+        retrieval = next(
+            (event for event in events if event.type is EventType.RETRIEVAL),
+            None,
+        )
+        content = final.payload.get("content") if final else None
         return {
             "run_id": run_id,
             "event_count": len(events),
             "status": _status(events),
             "final": final.payload if final else None,
             "last_event_id": events[-1].id if events else 0,
+            "started_at": events[0].timestamp.isoformat() if events else None,
+            "updated_at": events[-1].timestamp.isoformat() if events else None,
+            "conversation_id": started.payload.get("conversation_id") if started else None,
+            "message_id": started.payload.get("message_id") if started else None,
+            "prompt": retrieval.payload.get("query") if retrieval else None,
+            "final_preview": content[:180] if isinstance(content, str) else None,
         }
 
     def sse(self, event: RunEvent) -> str:
