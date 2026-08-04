@@ -1,5 +1,12 @@
 """Persistent, cited documents created from Highland conversations."""
 
+from .assistant import (
+    ArtifactAssistant,
+    ArtifactAssistantError,
+    ArtifactAssistantMessage,
+    ArtifactAssistantOperation,
+    ArtifactAssistantPreview,
+)
 from .coverage import (
     ClaimSupport,
     EvidenceCoverageChecker,
@@ -19,6 +26,11 @@ from .repository import (
 
 __all__ = [
     "Artifact",
+    "ArtifactAssistant",
+    "ArtifactAssistantError",
+    "ArtifactAssistantMessage",
+    "ArtifactAssistantOperation",
+    "ArtifactAssistantPreview",
     "ArtifactCitation",
     "ArtifactGenerationError",
     "ArtifactGenerator",

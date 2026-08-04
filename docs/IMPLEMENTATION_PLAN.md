@@ -1266,12 +1266,19 @@ Scope:
 - Add split conversation/editor mode.
 - Support Markdown editing, section selection, save state, revisions, and
   citation insertion.
+- Render Write, Preview, and Split views so raw Markdown and the formatted
+  document are easy to compare.
+- Explain that an artifact is a separate saved document derived from a
+  discovery answer, and distinguish document preview from AI section revision.
 - Show artifact provenance and a path back to the originating run.
 
 Acceptance criteria:
 
 - Manual edits persist without a model call.
 - Model-assisted section edits show a preview before replacement.
+- The formatted preview updates immediately from unsaved Markdown.
+- Claim-support review clearly describes unsupported claims as claims without
+  mapped saved evidence, not unsupported source systems.
 - Unsaved changes are protected during navigation.
 
 Verification:
@@ -1347,6 +1354,51 @@ Suggested commit:
 
 ```text
 Export Highland artifacts to Markdown and PDF
+```
+
+## E5.6 — Artifact-scoped AI file editing and readable evidence
+
+**Status:** ✅ Implemented
+**Implemented in:** current working change
+**Depends on:** E5.1, E5.2, E5.3
+
+Scope:
+
+- Add an artifact-only Cohere chat that cannot continue or mutate the
+  originating discovery run.
+- Keep a conversational working draft across multiple turns so follow-up
+  instructions refine the prior proposal rather than restarting from the saved
+  file.
+- Give the model bounded `read_artifact`, `read_saved_evidence`, and
+  `propose_markdown_edit` tools.
+- Require human approval before the proposed Markdown is written as a new
+  artifact revision.
+- Show the tool operations in the UI so learners can see the read, evidence,
+  proposal, and write boundaries.
+- Replace opaque evidence buttons with source cards that explain `E1` as
+  “Evidence 1,” show the supporting passage, and insert markers at the cursor.
+
+Acceptance criteria:
+
+- The assistant reads only the open artifact and its attached evidence.
+- A model proposal does not mutate the saved Markdown before approval.
+- Chat history and the unsaved working draft are sent together on follow-up
+  turns, while the durable artifact remains at its saved revision.
+- Applying a proposal uses optimistic revision checks and writes revision N+1.
+- Every evidence marker links to a readable source card in the editor preview.
+- Unsaved manual changes must be saved before an assistant edit begins.
+
+Verification:
+
+```bash
+pytest tests/unit/artifacts/test_assistant.py tests/integration/test_artifact_api.py
+npm --prefix web test
+```
+
+Suggested commit:
+
+```text
+Add artifact-scoped AI editing and readable evidence
 ```
 
 ---

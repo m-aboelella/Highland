@@ -930,8 +930,11 @@ export function DiscoverWorkspace() {
                 />
                 {events.some((event) => event.type === "final") && (
                   <div className="artifact-create-action">
+                    <p>
+                      Need a reusable document? Create a separate, editable briefing from this answer and its saved evidence.
+                    </p>
                     <button disabled={creatingArtifact} onClick={() => void turnIntoArtifact()}>
-                      {creatingArtifact ? "Creating…" : "Turn into artifact"}
+                      {creatingArtifact ? "Creating briefing…" : "Create saved briefing"}
                     </button>
                     {artifactError && <p className="form-error" role="alert">{artifactError}</p>}
                   </div>

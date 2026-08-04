@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import { ArtifactAssistantPanel } from "./artifact-assistant";
+import { MarkdownPreview } from "./artifact-markdown";
 
 const API = process.env.NEXT_PUBLIC_HIGHLAND_API_URL ?? "http://127.0.0.1:8080";
 
@@ -10,6 +13,9 @@ export type ArtifactCitation = {
   source_id: string;
   source_url: string;
   title?: string;
+  passage?: string;
+  source_system?: string;
+  updated_at?: string;
 };
 
 export type ArtifactDocument = {
@@ -40,7 +46,17 @@ type CoverageReport = {
     text: string;
     status: "supported" | "weakly_supported" | "unsupported" | "stale";
     explanation: string;
+    citation_ids?: string[];
   }>;
+};
+
+type EditorView = "write" | "preview" | "split";
+
+const coverageLabels: Record<CoverageReport["claims"][number]["status"], string> = {
+  supported: "Supported",
+  weakly_supported: "Needs a closer look",
+  unsupported: "No saved evidence mapped",
+  stale: "Source may be outdated",
 };
 
 export function ArtifactEditor({
@@ -52,6 +68,7 @@ export function ArtifactEditor({
 }) {
   const [artifact, setArtifact] = useState(initialArtifact);
   const [content, setContent] = useState(initialArtifact.content);
+  const [editorView, setEditorView] = useState<EditorView>("split");
   const [saveState, setSaveState] = useState<"saved" | "unsaved" | "saving">("saved");
   const [section, setSection] = useState("");
   const [revisionInstruction, setRevisionInstruction] = useState("");
@@ -59,6 +76,7 @@ export function ArtifactEditor({
   const [revisionCount, setRevisionCount] = useState<number>();
   const [coverage, setCoverage] = useState<CoverageReport>();
   const [actionError, setActionError] = useState<string>();
+  const markdownEditor = useRef<HTMLTextAreaElement>(null);
   const headings = useMemo(
     () =>
       [...content.matchAll(/^#{1,6}\s+(.+)$/gm)].map((match) => match[1].trim()),
@@ -73,7 +91,11 @@ export function ArtifactEditor({
     return () => window.removeEventListener("beforeunload", warn);
   }, [saveState]);
 
-  async function save(nextContent = content, nextCitations = artifact.citations) {
+  async function save(
+    nextContent = content,
+    nextCitations = artifact.citations,
+    reason = "manual edit",
+  ): Promise<ArtifactDocument | undefined> {
     setSaveState("saving");
     setActionError(undefined);
     try {
@@ -84,6 +106,7 @@ export function ArtifactEditor({
           expected_revision: artifact.revision,
           content: nextContent,
           citations: nextCitations,
+          reason,
         }),
       });
       if (!response.ok) {
@@ -94,9 +117,12 @@ export function ArtifactEditor({
       setContent(saved.content);
       setSaveState("saved");
       setPreview(undefined);
+      setCoverage(undefined);
+      return saved;
     } catch (caught) {
       setSaveState("unsaved");
       setActionError(caught instanceof Error ? caught.message : "The artifact could not be saved.");
+      return undefined;
     }
   }
 
@@ -149,12 +175,34 @@ export function ArtifactEditor({
     onClose?.();
   }
 
+  function insertEvidenceReference(citation: ArtifactCitation) {
+    const editor = markdownEditor.current;
+    const start = editor?.selectionStart ?? content.length;
+    const end = editor?.selectionEnd ?? content.length;
+    const marker = `[${citation.id}]`;
+    const needsSpace = start > 0 && !/\s/.test(content[start - 1]);
+    const insertion = `${needsSpace ? " " : ""}${marker}`;
+    setContent(`${content.slice(0, start)}${insertion}${content.slice(end)}`);
+    setSaveState("unsaved");
+    setCoverage(undefined);
+    if (editorView === "preview") setEditorView("split");
+    window.setTimeout(() => {
+      const nextEditor = markdownEditor.current;
+      const cursor = start + insertion.length;
+      nextEditor?.focus();
+      nextEditor?.setSelectionRange(cursor, cursor);
+    }, 0);
+  }
+
   return (
     <section className="artifact-editor" aria-label="Artifact editor">
       <header>
         <div>
-          <p className="eyebrow">Create · {artifact.artifact_type.replaceAll("_", " ")}</p>
+          <p className="eyebrow">Saved artifact · {artifact.artifact_type.replaceAll("_", " ")}</p>
           <h2>{artifact.title}</h2>
+          <p className="artifact-revision">
+            Revision {artifact.revision} · Updated {new Date(artifact.updated_at).toLocaleString()}
+          </p>
         </div>
         <div className="editor-actions">
           <span aria-live="polite">{saveState}</span>
@@ -172,83 +220,212 @@ export function ArtifactEditor({
         {" · "}
         <a href={`${API}/artifacts/${artifact.id}/export.pdf`}>Export PDF</a>
       </p>
-      {actionError && <p className="form-error" role="alert">{actionError}</p>}
-      <textarea
-        aria-label="Artifact Markdown"
-        value={content}
-        onChange={(event) => {
-          setContent(event.target.value);
-          setSaveState("unsaved");
-        }}
-      />
-      <div className="artifact-tools">
-        <label>
-          Section
-          <select value={section} onChange={(event) => setSection(event.target.value)}>
-            <option value="">Select a section</option>
-            {headings.map((heading) => <option key={heading}>{heading}</option>)}
-          </select>
-        </label>
-        <label>
-          Revision instruction
-          <input
-            value={revisionInstruction}
-            onChange={(event) => setRevisionInstruction(event.target.value)}
-          />
-        </label>
-        <button
-          disabled={!section || !revisionInstruction}
-          onClick={() => void reviseSection()}
-        >
-          Preview section edit
-        </button>
-        <button className="secondary" onClick={() => void loadRevisions()}>
-          Revisions {revisionCount === undefined ? "" : `(${revisionCount})`}
-        </button>
-        <button className="secondary" onClick={() => void checkEvidence()}>
-          Check evidence
-        </button>
+      <div className="artifact-explainer" role="note">
+        <span className="artifact-explainer-icon" aria-hidden="true">A</span>
+        <div>
+          <strong>This is a new saved document—not another discovery run.</strong>
+          <p>
+            Highland reshaped the completed answer into a reusable {artifact.artifact_type.replaceAll("_", " ")}
+            {" "}and carried its saved evidence forward. The wording may begin similarly, but this copy has its
+            own revisions and can be edited or exported without changing the original discovery answer.
+          </p>
+        </div>
       </div>
-      <div className="citation-insert">
-        <span>Insert citation:</span>
-        {artifact.citations.map((citation) => (
+      {actionError && <p className="form-error" role="alert">{actionError}</p>}
+      <div className="artifact-view-switcher" aria-label="Editor view">
+        {(["write", "preview", "split"] as const).map((view) => (
           <button
-            className="secondary"
-            key={citation.id}
-            title={citation.title ?? citation.source_id}
-            onClick={() => {
-              setContent((current) => `${current} [${citation.id}]`);
-              setSaveState("unsaved");
-            }}
+            aria-pressed={editorView === view}
+            className={editorView === view ? "active" : ""}
+            key={view}
+            onClick={() => setEditorView(view)}
+            type="button"
           >
-            [{citation.id}]
+            {view === "write" ? "Write" : view === "preview" ? "Preview" : "Split view"}
           </button>
         ))}
       </div>
+      <div className={`artifact-document artifact-document-${editorView}`}>
+        {editorView !== "preview" && (
+          <div className="artifact-pane artifact-write-pane">
+            <div className="artifact-pane-label">
+              <strong>Markdown</strong>
+              <span>Use plain text with Markdown formatting</span>
+            </div>
+            <textarea
+              aria-label="Artifact Markdown"
+              ref={markdownEditor}
+              value={content}
+              onChange={(event) => {
+                setContent(event.target.value);
+                setSaveState("unsaved");
+                setCoverage(undefined);
+              }}
+            />
+          </div>
+        )}
+        {editorView !== "write" && (
+          <div className="artifact-pane artifact-preview-pane">
+            <div className="artifact-pane-label">
+              <strong>Document preview</strong>
+              <span>Formatted reading view; PDF pages may differ</span>
+            </div>
+            <MarkdownPreview evidence={artifact.citations}>{content}</MarkdownPreview>
+          </div>
+        )}
+      </div>
+      <ArtifactAssistantPanel artifact={artifact} onApply={save} saveState={saveState} />
+      <section className="artifact-evidence-library" aria-labelledby="artifact-evidence-heading">
+        <header>
+          <div>
+            <p className="eyebrow">Evidence library</p>
+            <h3 id="artifact-evidence-heading">Sources saved with this artifact</h3>
+          </div>
+          <span>{artifact.citations.length} {artifact.citations.length === 1 ? "source" : "sources"}</span>
+        </header>
+        <p>
+          <strong>E means evidence.</strong> E1 is “Evidence 1,” not a user. A marker such as [E1]
+          connects a sentence in the Markdown to the first source card below.
+        </p>
+        <div className="artifact-evidence-cards">
+          {artifact.citations.map((citation) => (
+            <article id={`evidence-${citation.id}`} key={citation.id}>
+              <header>
+                <span className="evidence-id">{citation.id}</span>
+                <div>
+                  <strong>Evidence {citation.label}</strong>
+                  <h4>{citation.title ?? citation.source_id}</h4>
+                </div>
+              </header>
+              {citation.passage && <blockquote>{citation.passage}</blockquote>}
+              <dl>
+                <dt>Source</dt>
+                <dd>{citation.source_system ?? "saved discovery source"}</dd>
+                <dt>Record</dt>
+                <dd>{citation.source_id}</dd>
+                {citation.updated_at && <><dt>Updated</dt><dd>{new Date(citation.updated_at).toLocaleDateString()}</dd></>}
+              </dl>
+              <div>
+                <button className="secondary" onClick={() => insertEvidenceReference(citation)}>
+                  Insert [{citation.id}] at cursor
+                </button>
+                {citation.source_url && (
+                  <a href={citation.source_url} rel="noreferrer" target="_blank">Open source ↗</a>
+                )}
+              </div>
+            </article>
+          ))}
+          {!artifact.citations.length && (
+            <div className="empty-state">
+              <strong>No evidence was saved with this artifact.</strong>
+              <span>The assistant can reorganize the document, but it should not invent new factual claims.</span>
+            </div>
+          )}
+        </div>
+      </section>
+      <div className="artifact-workbench">
+        <section className="artifact-tool-card" aria-labelledby="section-edit-heading">
+          <header>
+            <div>
+              <p className="eyebrow">Optional AI edit</p>
+              <h3 id="section-edit-heading">Suggest a change to one section</h3>
+            </div>
+            <span className="tool-step">Preview before applying</span>
+          </header>
+          <p>Choose a section and describe the change. Highland will not replace it until you approve the suggestion.</p>
+          <div className="artifact-tools">
+            <label>
+              Section
+              <select value={section} onChange={(event) => setSection(event.target.value)}>
+                <option value="">Select a section</option>
+                {headings.map((heading) => <option key={heading}>{heading}</option>)}
+              </select>
+            </label>
+            <label className="revision-instruction">
+              What should change?
+              <input
+                placeholder="For example: make this shorter and lead with the decision"
+                value={revisionInstruction}
+                onChange={(event) => setRevisionInstruction(event.target.value)}
+              />
+            </label>
+            <button
+              disabled={!section || !revisionInstruction}
+              onClick={() => void reviseSection()}
+            >
+              Preview suggested change
+            </button>
+          </div>
+        </section>
+        <section className="artifact-tool-card" aria-labelledby="claim-support-heading">
+          <header>
+            <div>
+              <p className="eyebrow">Optional review</p>
+              <h3 id="claim-support-heading">Review claim support</h3>
+            </div>
+            <span className="tool-step">Saved revision only</span>
+          </header>
+          <p>
+            Highland compares factual claims with evidence saved from discovery. “No saved evidence mapped” means
+            the claim needs a citation or rewrite—it does not mean the source itself is unsupported.
+          </p>
+          <div className="artifact-review-actions">
+            <button
+              className="secondary"
+              disabled={saveState !== "saved"}
+              onClick={() => void checkEvidence()}
+            >
+              Review saved claims
+            </button>
+            {saveState !== "saved" && <small>Save this revision before reviewing its claims.</small>}
+          </div>
+        </section>
+      </div>
+      <button className="artifact-revisions secondary" onClick={() => void loadRevisions()}>
+        Revision history {revisionCount === undefined ? "" : `(${revisionCount})`}
+      </button>
       {preview && (
         <aside className="revision-preview" aria-label="Section revision preview">
-          <h3>Preview: {preview.heading}</h3>
-          <pre>{preview.proposed_markdown}</pre>
-          <button
-            onClick={() => void save(preview.resulting_content, preview.citations)}
-          >
-            Replace this section
-          </button>
-          <button className="secondary" onClick={() => setPreview(undefined)}>Discard preview</button>
+          <header>
+            <div>
+              <p className="eyebrow">Suggested change</p>
+              <h3>{preview.heading}</h3>
+            </div>
+            <span>Nothing has been replaced yet</span>
+          </header>
+          <MarkdownPreview evidence={preview.citations}>{preview.proposed_markdown}</MarkdownPreview>
+          <div className="revision-preview-actions">
+            <button onClick={() => void save(preview.resulting_content, preview.citations)}>
+              Apply and save section
+            </button>
+            <button className="secondary" onClick={() => setPreview(undefined)}>Discard suggestion</button>
+          </div>
         </aside>
       )}
       {coverage && (
         <aside className="coverage-report" aria-label="Evidence coverage">
-          <h3>Claim and evidence coverage</h3>
+          <header>
+            <div>
+              <p className="eyebrow">Review result</p>
+              <h3>Claim support in revision {artifact.revision}</h3>
+            </div>
+            <span>{coverage.claims.length} {coverage.claims.length === 1 ? "claim" : "claims"} reviewed</span>
+          </header>
           <p>{coverage.advisory}</p>
-          <ul>
-            {coverage.claims.map((claim, index) => (
-              <li className={`coverage-${claim.status}`} key={`${claim.text}-${index}`}>
-                <b>{claim.status.replaceAll("_", " ")}</b> {claim.text}
-                <small>{claim.explanation}</small>
-              </li>
-            ))}
-          </ul>
+          {coverage.claims.length ? (
+            <ul>
+              {coverage.claims.map((claim, index) => (
+                <li className={`coverage-${claim.status}`} key={`${claim.text}-${index}`}>
+                  <b>{coverageLabels[claim.status]}</b>
+                  <q>{claim.text}</q>
+                  {claim.citation_ids?.length ? (
+                    <small>Saved evidence: {claim.citation_ids.map((id) => `[${id}]`).join(", ")}</small>
+                  ) : null}
+                  <small>{claim.explanation}</small>
+                </li>
+              ))}
+            </ul>
+          ) : <p>No factual claims were identified in this revision.</p>}
         </aside>
       )}
     </section>

@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .artifacts import ArtifactGenerator, ArtifactRepository, EvidenceCoverageChecker
+from .artifacts import (
+    ArtifactAssistant,
+    ArtifactGenerator,
+    ArtifactRepository,
+    EvidenceCoverageChecker,
+)
 from .discover.conversations import ConversationStore
 from .discover.service import DiscoverService
 from .models.provider import ModelProvider, build_model_provider
@@ -62,6 +67,7 @@ class ApplicationServices:
     cancellations: RunCancellationStore
     conversations: ConversationStore
     artifacts: ArtifactRepository
+    artifact_assistant: ArtifactAssistant
     artifact_generator: ArtifactGenerator
     coverage_checker: EvidenceCoverageChecker
     workflows: WorkflowRepository
@@ -96,6 +102,7 @@ class ApplicationServices:
             cancellations=cancellations,
             conversations=conversations,
             artifacts=artifacts,
+            artifact_assistant=ArtifactAssistant(provider.chat, artifacts),
             artifact_generator=ArtifactGenerator(provider.chat, artifacts),
             coverage_checker=EvidenceCoverageChecker(provider.chat),
             workflows=workflows,

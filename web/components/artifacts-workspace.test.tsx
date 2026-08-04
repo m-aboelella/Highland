@@ -19,7 +19,7 @@ describe("ArtifactsWorkspace", () => {
 
     expect(screen.getByText("Loading artifacts…")).toBeInTheDocument();
     expect(await screen.findByText("No artifacts yet.")).toBeInTheDocument();
-    expect(screen.getByText(/Turn into artifact/)).toBeInTheDocument();
+    expect(screen.getByText(/Create saved briefing/)).toBeInTheDocument();
   });
 
   it("shows a recoverable API error instead of an empty workspace", async () => {

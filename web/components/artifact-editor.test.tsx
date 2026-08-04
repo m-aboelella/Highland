@@ -13,6 +13,10 @@ const artifact: ArtifactDocument = {
     label: "1",
     source_id: "doc_1",
     source_url: "mock://archive/doc_1",
+    title: "Northwind success plan",
+    passage: "Capacity review is due August 7.",
+    source_system: "archive",
+    updated_at: "2026-07-01T00:00:00Z",
   }],
   revision: 1,
   conversation_id: "con_1",
@@ -44,6 +48,29 @@ describe("ArtifactEditor", () => {
     expect(fetch.mock.calls[0][1].method).toBe("PATCH");
   });
 
+  it("explains the saved copy and renders a formatted document preview", () => {
+    render(<ArtifactEditor initialArtifact={artifact} />);
+
+    expect(screen.getByText(/new saved document—not another discovery run/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Editor view")).toBeInTheDocument();
+    expect(screen.getByText("Document preview")).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: "Summary" })).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    expect(screen.queryByLabelText("Artifact Markdown")).not.toBeInTheDocument();
+    expect(screen.getByText("Formatted reading view; PDF pages may differ")).toBeInTheDocument();
+  });
+
+  it("explains evidence IDs and links preview markers to readable source cards", () => {
+    render(<ArtifactEditor initialArtifact={artifact} />);
+
+    expect(screen.getByText(/E1 is “Evidence 1,” not a user/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Northwind success plan" })).toBeInTheDocument();
+    expect(screen.getByText("Capacity review is due August 7.")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "E1" })[0]).toHaveAttribute("href", "#evidence-E1");
+    expect(screen.getByRole("button", { name: "Insert [E1] at cursor" })).toBeInTheDocument();
+  });
+
   it("previews a section edit before replacing it and keeps provenance visible", async () => {
     const preview = {
       expected_revision: 1,
@@ -57,13 +84,13 @@ describe("ArtifactEditor", () => {
     render(<ArtifactEditor initialArtifact={artifact} />);
 
     fireEvent.change(screen.getByLabelText("Section"), { target: { value: "Summary" } });
-    fireEvent.change(screen.getByLabelText("Revision instruction"), {
+    fireEvent.change(screen.getByLabelText("What should change?"), {
       target: { value: "Make it concise" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Preview section edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Preview suggested change" }));
 
-    expect(await screen.findByLabelText("Section revision preview")).toHaveTextContent("Revised [E1]");
-    expect(screen.getByRole("button", { name: "Replace this section" })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Section revision preview")).toHaveTextContent("Revised E1.");
+    expect(screen.getByRole("button", { name: "Apply and save section" })).toBeInTheDocument();
     expect(screen.getByText(/From conversation con_1/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View originating run" })).toHaveAttribute(
       "href",
@@ -97,7 +124,7 @@ describe("ArtifactEditor", () => {
     expect(screen.getByLabelText("Artifact Markdown")).toHaveValue("Unsaved but recoverable");
   });
 
-  it("shows unsupported factual claims after rerunning evidence coverage", async () => {
+  it("explains claims without mapped evidence after rerunning support review", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -110,8 +137,20 @@ describe("ArtifactEditor", () => {
       }),
     }));
     render(<ArtifactEditor initialArtifact={artifact} />);
-    fireEvent.click(screen.getByRole("button", { name: "Check evidence" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review saved claims" }));
     expect(await screen.findByLabelText("Evidence coverage")).toHaveTextContent("Revenue fell.");
-    expect(screen.getByText("unsupported")).toBeInTheDocument();
+    expect(screen.getByText("No saved evidence mapped")).toBeInTheDocument();
+    expect(screen.getByText(/does not mean the source itself is unsupported/i)).toBeInTheDocument();
+  });
+
+  it("requires saving draft edits before reviewing their claim support", () => {
+    render(<ArtifactEditor initialArtifact={artifact} />);
+
+    fireEvent.change(screen.getByLabelText("Artifact Markdown"), {
+      target: { value: "Unsaved claim" },
+    });
+
+    expect(screen.getByRole("button", { name: "Review saved claims" })).toBeDisabled();
+    expect(screen.getByText("Save this revision before reviewing its claims.")).toBeInTheDocument();
   });
 });

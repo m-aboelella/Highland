@@ -35,7 +35,10 @@ export function ArtifactsWorkspace() {
     <section className="welcome">
       <p className="eyebrow">Create</p>
       <h1>Artifacts that keep their evidence.</h1>
-      <p>Open a persistent document or turn a completed answer into a new one.</p>
+      <p>
+        An artifact is a separate, persistent document created from a completed discovery answer.
+        It keeps the saved evidence, then gives you a versioned place to edit, preview, and export the result.
+      </p>
       <div className="artifact-list" aria-busy={state === "loading"}>
         {state === "loading" && (
           <div className="empty-state">
@@ -59,7 +62,7 @@ export function ArtifactsWorkspace() {
         {state === "ready" && !artifacts.length && (
           <div className="empty-state">
             <strong>No artifacts yet.</strong>
-            <span>Complete a Discover answer, then choose “Turn into artifact.”</span>
+            <span>Complete a discovery answer, then choose “Create saved briefing.”</span>
           </div>
         )}
       </div>

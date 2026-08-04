@@ -19,6 +19,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .artifacts import (
+    ArtifactAssistantError,
+    ArtifactAssistantMessage,
     ArtifactCitation,
     ArtifactGenerationError,
     ArtifactType,
@@ -99,6 +101,13 @@ class ReviseArtifactSectionRequest(ApiModel):
     instructions: str = Field(min_length=1, max_length=20_000)
 
 
+class PreviewArtifactAssistantEditRequest(ApiModel):
+    expected_revision: int = Field(ge=1)
+    instruction: str = Field(min_length=1, max_length=20_000)
+    history: list[ArtifactAssistantMessage] = Field(default_factory=list, max_length=12)
+    draft_content: str | None = Field(default=None, min_length=1, max_length=1_000_000)
+
+
 class DraftWorkflowRequest(ApiModel):
     goal: str = Field(min_length=1, max_length=20_000)
 
@@ -128,6 +137,7 @@ def register_api_routes(app: FastAPI, services: ApplicationServices) -> None:
     cancellations = services.cancellations
     conversations = services.conversations
     artifacts = services.artifacts
+    artifact_assistant = services.artifact_assistant
     provider = services.provider
     artifact_generator = services.artifact_generator
     coverage_checker = services.coverage_checker
@@ -405,6 +415,30 @@ def register_api_routes(app: FastAPI, services: ApplicationServices) -> None:
                 detail=f"Evidence coverage model failed: {error}",
             ) from error
         return report.model_dump(mode="json")
+
+    @artifact_routes.post("/artifacts/{artifact_id}/assistant/preview")
+    async def preview_artifact_assistant_edit(
+        artifact_id: str,
+        request: PreviewArtifactAssistantEditRequest,
+    ) -> dict[str, object]:
+        try:
+            preview = await artifact_assistant.preview_edit(
+                artifact_id,
+                expected_revision=request.expected_revision,
+                instruction=request.instruction,
+                history=request.history,
+                draft_content=request.draft_content,
+            )
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Artifact not found") from None
+        except ArtifactAssistantError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        except ModelError as error:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Artifact assistant model failed: {error}",
+            ) from error
+        return preview.model_dump(mode="json")
 
     @artifact_routes.get("/artifacts/{artifact_id}/export.md")
     async def export_artifact_markdown(artifact_id: str) -> Response:

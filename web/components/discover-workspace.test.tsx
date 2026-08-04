@@ -378,7 +378,7 @@ describe("DiscoverWorkspace", () => {
     render(<DiscoverWorkspace />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Prepare the Northwind meeting/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Turn into artifact" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create saved briefing" }));
 
     expect(await screen.findByRole("region", { name: "Artifact editor" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Northwind briefing" })).toBeInTheDocument();
@@ -442,7 +442,7 @@ describe("DiscoverWorkspace", () => {
     render(<DiscoverWorkspace />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Prepare the Northwind meeting/ }));
-    const create = await screen.findByRole("button", { name: "Turn into artifact" });
+    const create = await screen.findByRole("button", { name: "Create saved briefing" });
     fireEvent.click(create);
 
     const alert = await screen.findByRole("alert");
