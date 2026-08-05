@@ -16,11 +16,13 @@ def test_builder_api_keeps_test_draft_separate_from_published_versions(tmp_path:
     with TestClient(
         create_app(HighlandSettings(workspace_dir=tmp_path, connector_commands={}))
     ) as client:
-        saved = client.post("/workflows", json={"workflow": workflow.model_dump(mode="json")})
-        assert saved.status_code == 201
-        test_run = client.post("/workflows/wf_builder/runs", json={"test": True})
+        test_run = client.post(
+            "/workflows/wf_builder/runs",
+            json={"test": True, "workflow": workflow.model_dump(mode="json")},
+        )
         assert test_run.status_code == 200
         assert test_run.json()["workflow_version"] == 0
+        assert client.get("/workflows/wf_builder").status_code == 200
         assert client.get("/workflows/wf_builder").json()["versions"] == []
 
         published = client.post("/workflows/wf_builder/publish")

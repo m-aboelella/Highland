@@ -74,3 +74,33 @@ async def test_executor_persists_inputs_outputs_and_resumes_without_repeating(tm
     assert resumed.nodes["second"].inputs == {"prompt": "durable"}
     assert resumed.nodes["second"].attempts == 2
     assert len(resumed_model.requests) == 1
+
+
+@pytest.mark.asyncio
+async def test_generate_node_receives_its_named_workflow_inputs(tmp_path: Path) -> None:
+    workflow = WorkflowDefinition(
+        id="wf_context",
+        name="Context",
+        nodes=[
+            TriggerNode(id="start", name="Start"),
+            GenerateNode(
+                id="report",
+                name="Report",
+                inputs={"metrics": NodeInput(value={"p95_ms": 420})},
+                prompt=NodeInput(value="Summarize the metrics"),
+            ),
+        ],
+        edges=[WorkflowEdge(source="start", target="report")],
+    )
+    model = ScriptedChatModel([generated("complete")])
+
+    run = await WorkflowExecutor(
+        model=model,
+        tools=object(),
+        repository=WorkflowRunRepository(tmp_path / "runs"),
+    ).run(workflow, run_id="run_context")
+
+    assert run.status is WorkflowRunStatus.COMPLETED
+    prompt = model.requests[0].messages[-1].content
+    assert prompt.startswith("Summarize the metrics\n\nWorkflow inputs:")
+    assert '"p95_ms": 420' in prompt

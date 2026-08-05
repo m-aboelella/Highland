@@ -99,7 +99,10 @@ class WorkflowEdge(WorkflowModel):
 
 class WorkflowDefinition(WorkflowModel):
     schema_version: int = 1
-    id: str = Field(default_factory=lambda: f"wf_{uuid4().hex}")
+    id: str = Field(
+        default_factory=lambda: f"wf_{uuid4().hex}",
+        pattern=r"^wf_[A-Za-z0-9_-]+$",
+    )
     name: str
     description: str = ""
     nodes: list[WorkflowNode] = Field(min_length=1)

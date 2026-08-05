@@ -324,6 +324,14 @@ class WorkflowExecutor:
         if isinstance(node, GenerateNode):
             if run.model_calls >= self.budgets.max_model_calls:
                 raise RuntimeError("workflow model-call budget exceeded")
+            prompt = str(inputs["prompt"])
+            context = {name: value for name, value in inputs.items() if name != "prompt"}
+            if context:
+                prompt += "\n\nWorkflow inputs:\n" + json.dumps(
+                    context,
+                    sort_keys=True,
+                    default=str,
+                )
             response = await self.model.chat(
                 ChatRequest(
                     messages=[
@@ -331,7 +339,7 @@ class WorkflowExecutor:
                             role=MessageRole.SYSTEM,
                             content="Execute this reviewed workflow generation step faithfully.",
                         ),
-                        Message(role=MessageRole.USER, content=str(inputs["prompt"])),
+                        Message(role=MessageRole.USER, content=prompt),
                     ],
                     response_schema=node.response_schema,
                     required_capabilities=ModelCapabilities(

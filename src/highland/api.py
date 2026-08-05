@@ -121,6 +121,7 @@ class RunWorkflowRequest(ApiModel):
     version: int | None = Field(default=None, ge=1)
     test: bool = True
     trigger: dict[str, object] = Field(default_factory=dict)
+    workflow: WorkflowDefinition | None = None
 
 
 class ScheduleWorkflowRequest(ApiModel):
@@ -200,6 +201,11 @@ def register_api_routes(app: FastAPI, services: ApplicationServices) -> None:
                 draft = await planner.draft(request.goal)
             except WorkflowPlanningError as error:
                 raise HTTPException(status_code=422, detail=str(error)) from error
+            except ModelError as error:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Couldn't create the workflow because the model request failed: {error}",
+                ) from error
         return draft.model_dump(mode="json")
 
     @workflow_routes.post("/workflows", status_code=status.HTTP_201_CREATED)
@@ -237,12 +243,28 @@ def register_api_routes(app: FastAPI, services: ApplicationServices) -> None:
     @workflow_routes.post("/workflows/{workflow_id}/runs")
     async def run_workflow(workflow_id: str, request: RunWorkflowRequest) -> dict[str, object]:
         if request.test:
-            try:
-                definition = workflows.get_draft(workflow_id)
-            except FileNotFoundError:
-                raise HTTPException(status_code=404, detail="Workflow draft not found") from None
+            if request.workflow is not None:
+                if request.workflow.id != workflow_id:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="The test workflow ID does not match the requested workflow",
+                    )
+                definition = workflows.save_draft(request.workflow)
+            else:
+                try:
+                    definition = workflows.get_draft(workflow_id)
+                except FileNotFoundError:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Workflow draft not found. Include or save the draft before testing.",
+                    ) from None
             version = request.version or 0
         else:
+            if request.workflow is not None:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Inline drafts can only be used for test runs",
+                )
             if request.version is None:
                 raise HTTPException(status_code=422, detail="Published version is required")
             try:
