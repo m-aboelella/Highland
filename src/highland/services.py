@@ -17,13 +17,16 @@ from .runtime.agent import AgentProfile
 from .runtime.approvals import ApprovalStore
 from .runtime.cancellation import RunCancellationStore
 from .runtime.events import RunEventStore
+from .runtime.mcp import MCPGateway
 from .runtime.policy import ToolRegistry
 from .settings import HighlandSettings
 from .workflows import (
     WeeklyCustomerHealthRunner,
     WeeklyHealthRunRepository,
+    WorkflowDefinition,
     WorkflowExecutor,
     WorkflowRepository,
+    WorkflowRun,
     WorkflowRunRepository,
 )
 from .workflows.schedules import WorkflowScheduleRepository
@@ -159,3 +162,62 @@ class ApplicationServices:
             runs=WeeklyHealthRunRepository(self.workspace.runs / "weekly-health"),
             events=self.run_events,
         )
+
+    async def execute_workflow(
+        self,
+        definition: WorkflowDefinition,
+        *,
+        run_id: str,
+        workflow_version: int,
+        trigger: dict[str, object],
+        test: bool,
+    ) -> WorkflowRun:
+        """Execute and trace a workflow through the production MCP boundary."""
+        self.run_events.append(
+            run_id,
+            "run_started",
+            {
+                "workflow_id": definition.id,
+                "workflow_version": workflow_version,
+                "test": test,
+            },
+        )
+        async with MCPGateway(
+            self.settings.connector_commands,
+            startup_timeout_seconds=self.settings.connector_timeout_seconds,
+            request_timeout_seconds=self.settings.connector_timeout_seconds,
+        ) as gateway:
+            registry = ToolRegistry.from_file(gateway, self.settings.tool_policy_config)
+            run = await self.workflow_executor(registry).run(
+                definition,
+                run_id=run_id,
+                workflow_version=workflow_version,
+                trigger=trigger,
+            )
+        node_kinds = {node.id: node.kind for node in definition.nodes}
+        for node in run.nodes.values():
+            self.run_events.append(
+                run_id,
+                "model_call" if node_kinds[node.node_id] == "generate" else "tool_call",
+                {
+                    "node_id": node.node_id,
+                    "status": node.status.value,
+                    "attempts": node.attempts,
+                    "duration_ms": node.duration_ms,
+                    "usage": node.usage.model_dump(mode="json"),
+                },
+            )
+        terminal_event = {
+            "completed": "run_completed",
+            "paused": "approval_required",
+        }.get(run.status.value, "run_failed")
+        self.run_events.append(
+            run_id,
+            terminal_event,
+            {
+                "workflow_id": definition.id,
+                "workflow_version": workflow_version,
+                "status": run.status.value,
+            },
+        )
+        return run

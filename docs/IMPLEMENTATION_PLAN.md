@@ -236,6 +236,7 @@ User
 | M14 — Container ingestion startup | ✅ Implemented | 1/1 | Propagate connector service URLs into ingestion MCP processes |
 | M15 — Container application configuration | ✅ Implemented | 1/1 | Resolve packaged runtime configuration from explicit image paths |
 | M16 — Container evaluation configuration | ✅ Implemented | 1/1 | Resolve retrieval evaluation artifacts through portable settings |
+| M17 — Maintainability refactor | 🟨 Partial | 1/4 | Smaller transport, UI, runtime, and provider boundaries |
 
 ---
 
@@ -2515,6 +2516,73 @@ Delivered:
 
 ---
 
+# M17 — Maintainability refactor
+
+**Milestone status:** 🟨 Partial
+**Milestone outcome:** Highland keeps its public behavior while the main HTTP,
+frontend, orchestration, and provider hotspots become easier to read and test.
+
+## E17.1 — Separate HTTP teaching surfaces
+
+**Status:** ✅ Implemented
+**Implemented in:** this commit
+**Depends on:** M16
+
+Scope:
+
+- Keep `create_app()` limited to application composition and middleware.
+- Give Discover, artifacts, workflows, and platform operations independent
+  router modules with shared request contracts.
+- Move workflow execution and event projection out of endpoint functions.
+- Preserve all URLs, status codes, request bodies, and response payloads.
+
+Verification:
+
+```bash
+pytest tests/test_api.py tests/integration/test_conversation_api.py \
+  tests/integration/test_artifact_api.py tests/acceptance/test_workflow_builder.py \
+  tests/integration/test_sse_reconnect.py
+ruff check src/highland/api.py src/highland/http src/highland/services.py
+```
+
+## E17.2 — Decompose frontend feature orchestration
+
+**Status:** ⬜ Not started
+**Depends on:** E17.1
+
+Scope:
+
+- Add a typed shared API client and normalized HTTP errors.
+- Extract Discover run/SSE lifecycle from presentation components.
+- Separate trace, citation, history, and workflow-run presentation components.
+- Preserve user-visible behavior and accessibility contracts.
+
+## E17.3 — Simplify runtime and workflow orchestration
+
+**Status:** ⬜ Not started
+**Depends on:** E17.2
+
+Scope:
+
+- Centralize usage aggregation.
+- Make agent run state and phases explicit while preserving the linear loop.
+- Type workflow nodes and tool execution through narrow protocols.
+- Extract workflow checkpoint, approval, loop, and failure transitions.
+
+## E17.4 — Clarify provider and CLI boundaries
+
+**Status:** ⬜ Not started
+**Depends on:** E17.3
+
+Scope:
+
+- Separate Cohere mapping, chat/streaming, embedding, and reranking concerns
+  while preserving current imports.
+- Dispatch CLI commands through focused handlers sharing configured services.
+- Expand MyPy coverage to every refactored module.
+
+---
+
 # Working agreement for future Codex sessions
 
 ## Session startup
@@ -2583,7 +2651,7 @@ E1.* + E2.1 -> E2.4 -> E2.5 -> E2.6
 E3.2 + model providers -> E3.3 -> E3.4 -> E3.5 -> E3.6
 M2 + M3 -> M4 -> M5
 M2 + M3 + M5 -> M6
-M3 through M6 -> M7 -> M8 -> M9 -> M10 -> M11 -> M12 -> M13 -> M14 -> M15 -> M16
+M3 through M6 -> M7 -> M8 -> M9 -> M10 -> M11 -> M12 -> M13 -> M14 -> M15 -> M16 -> M17
 ```
 
 E3.1 is intentionally required by E2.2 because index population should teach
@@ -2594,7 +2662,7 @@ behind the connector layer.
 
 Highland is complete when:
 
-- all epics through M16 are implemented or explicitly moved out of scope with a
+- all epics through M17 are implemented or explicitly moved out of scope with a
   documented reason;
 - the default suite is deterministic, offline, and non-billable;
 - the three live Cohere scenarios can be run separately with explicit opt-in;
