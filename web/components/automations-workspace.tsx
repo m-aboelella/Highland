@@ -42,6 +42,7 @@ export function AutomationsWorkspace() {
   const [messageKind, setMessageKind] = useState<"status" | "error">("status");
   const [busy, setBusy] = useState<"draft" | "save" | "publish" | "test" | null>(null);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+  const [publishedFingerprint, setPublishedFingerprint] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`${api}/workflow-runs`)
@@ -69,6 +70,8 @@ export function AutomationsWorkspace() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail ?? "Planning failed.");
       setWorkflow(payload.workflow);
+      setVersions([]);
+      setPublishedFingerprint(null);
       setMessageKind("status");
       setMessage(`Review the model rationale: ${payload.planner.rationale}`);
     } catch (caught) {
@@ -82,15 +85,22 @@ export function AutomationsWorkspace() {
   async function save() {
     if (!workflow) return;
     setBusy("save");
+    setMessageKind("status");
+    setMessage("Saving the current draft…");
     try {
       const response = await fetch(`${api}/workflows`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workflow }),
       });
-      if (!response.ok) throw new Error("The workflow draft could not be saved.");
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.detail ?? "The workflow draft could not be saved.");
+      }
+      setMessageKind("status");
       setMessage("Draft saved. It is not published or scheduled.");
     } catch (caught) {
+      setMessageKind("error");
       setMessage(caught instanceof Error ? caught.message : "Save failed.");
     } finally {
       setBusy(null);
@@ -100,18 +110,37 @@ export function AutomationsWorkspace() {
   async function publish() {
     if (!workflow) return;
     setBusy("publish");
+    setMessageKind("status");
+    setMessage("Saving and publishing the current reviewed draft…");
     try {
-      const response = await fetch(`${api}/workflows/${workflow.id}/publish`, { method: "POST" });
+      const response = await fetch(`${api}/workflows/${workflow.id}/publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workflow }),
+      });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail ?? "The workflow could not be published.");
-      setVersions((current) => [...current, payload.version]);
-      setMessage(`Published immutable version ${payload.version}.`);
+      if (typeof payload.version !== "number") {
+        throw new Error("The workflow was published, but the API did not return its version.");
+      }
+      setVersions(Array.from({ length: payload.version }, (_, index) => index + 1));
+      setPublishedFingerprint(workflowFingerprint(workflow));
+      setMessageKind("status");
+      setMessage(
+        `Version ${payload.version} is published and locked. Scheduling has not been activated.`
+      );
     } catch (caught) {
+      setMessageKind("error");
       setMessage(caught instanceof Error ? caught.message : "Publish failed.");
     } finally {
       setBusy(null);
     }
   }
+
+  const latestVersion = versions.at(-1);
+  const currentDraftIsPublished = Boolean(
+    workflow && publishedFingerprint === workflowFingerprint(workflow)
+  );
 
   async function testRun() {
     if (!workflow) return;
@@ -200,10 +229,34 @@ export function AutomationsWorkspace() {
                 <button className="secondary" disabled={busy !== null} onClick={() => void testRun()}>
                   {busy === "test" ? "Running…" : "Test run"}
                 </button>
-                <button disabled={busy !== null} onClick={() => void publish()}>
-                  {busy === "publish" ? "Publishing…" : "Publish"}
+                <button
+                  disabled={busy !== null || currentDraftIsPublished}
+                  onClick={() => void publish()}
+                >
+                  {busy === "publish"
+                    ? "Publishing…"
+                    : currentDraftIsPublished
+                      ? `Published v${latestVersion}`
+                      : versions.length
+                        ? "Publish changes"
+                        : "Publish"}
                 </button>
               </div>
+              <p className="publication-note">
+                Publishing locks this reviewed draft as a version. It does not activate a schedule.
+              </p>
+              {latestVersion !== undefined && (
+                <section className="publication-card" aria-label="Publication status">
+                  <div>
+                    <small>Published</small>
+                    <strong>Version {latestVersion} is ready</strong>
+                  </div>
+                  <p>
+                    This version is immutable and ready for scheduling. Edit the draft to publish
+                    a new version.
+                  </p>
+                </section>
+              )}
               <p>Version history: {versions.length ? versions.join(", ") : "No published versions"}</p>
             </>
           )}
@@ -428,6 +481,10 @@ function friendlyNodeStatus(status: string): string {
 function readableRunError(error: unknown): string {
   if (typeof error !== "string" || !error.trim()) return "the workflow could not complete.";
   return error.replace(/^[A-Za-z][A-Za-z0-9]*(?:Error|Rejected):\s*/, "");
+}
+
+function workflowFingerprint(workflow: Workflow): string {
+  return JSON.stringify(workflow);
 }
 
 function testRunRequestError(payload: unknown): string {

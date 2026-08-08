@@ -38,6 +38,10 @@ class WorkflowRepository:
     ) -> WorkflowVersion:
         definition = self.get_draft(workflow_id)
         versions = self.list_versions(workflow_id)
+        if versions and self._publishable_content(versions[-1].definition) == (
+            self._publishable_content(definition)
+        ):
+            return versions[-1]
         published = WorkflowVersion(
             workflow_id=workflow_id,
             version=(versions[-1].version + 1 if versions else 1),
@@ -80,6 +84,13 @@ class WorkflowRepository:
         if not self._valid_id.fullmatch(workflow_id):
             raise FileNotFoundError(workflow_id)
         return self.directory / workflow_id
+
+    @staticmethod
+    def _publishable_content(definition: WorkflowDefinition) -> dict[str, object]:
+        return definition.model_dump(
+            mode="json",
+            exclude={"created_at", "updated_at"},
+        )
 
     @staticmethod
     def _atomic_write(target: Path, content: str) -> None:

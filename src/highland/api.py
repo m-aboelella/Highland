@@ -124,6 +124,10 @@ class RunWorkflowRequest(ApiModel):
     workflow: WorkflowDefinition | None = None
 
 
+class PublishWorkflowRequest(ApiModel):
+    workflow: WorkflowDefinition | None = None
+
+
 class ScheduleWorkflowRequest(ApiModel):
     version: int = Field(ge=1)
     interval_seconds: int = Field(ge=60)
@@ -234,7 +238,16 @@ def register_api_routes(app: FastAPI, services: ApplicationServices) -> None:
         }
 
     @workflow_routes.post("/workflows/{workflow_id}/publish")
-    async def publish_workflow(workflow_id: str) -> dict[str, object]:
+    async def publish_workflow(
+        workflow_id: str, request: PublishWorkflowRequest | None = None
+    ) -> dict[str, object]:
+        if request is not None and request.workflow is not None:
+            if request.workflow.id != workflow_id:
+                raise HTTPException(
+                    status_code=422,
+                    detail="The workflow ID does not match the draft being published",
+                )
+            workflows.save_draft(request.workflow)
         try:
             return workflows.publish(workflow_id).model_dump(mode="json")
         except FileNotFoundError:

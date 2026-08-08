@@ -40,6 +40,43 @@ test("draft plan is explicitly reviewable before test or publication", async () 
   expect(screen.getByText(/Review the model rationale/)).toBeInTheDocument();
 });
 
+test("publish saves the visible draft and shows a durable publication state", async () => {
+  vi.mocked(fetch).mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ version: 3 }),
+  } as Response);
+
+  render(<AutomationsWorkspace />);
+  fireEvent.change(screen.getByLabelText("Natural-language goal"), {
+    target: { value: "Review customer health" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Draft plan" }));
+  await screen.findByText("Weekly health");
+  fireEvent.change(screen.getByLabelText("health name"), {
+    target: { value: "Create the customer health update" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+
+  expect(await screen.findByText("Version 3 is published and locked. Scheduling has not been activated."))
+    .toBeInTheDocument();
+  expect(screen.getByLabelText("Publication status")).toHaveTextContent("Version 3 is ready");
+  const publishedButton = screen.getByRole("button", { name: "Published v3" });
+  expect(publishedButton).toBeDisabled();
+  const request = vi.mocked(fetch).mock.calls[2];
+  expect(request[0]).toBe("http://127.0.0.1:8080/workflows/wf_health/publish");
+  expect(JSON.parse(String(request[1]?.body))).toMatchObject({
+    workflow: {
+      id: "wf_health",
+      nodes: [{ id: "start" }, { id: "health", name: "Create the customer health update" }],
+    },
+  });
+
+  fireEvent.change(screen.getByLabelText("health name"), {
+    target: { value: "Create an updated customer health message" },
+  });
+  expect(screen.getByRole("button", { name: "Publish changes" })).toBeEnabled();
+});
+
 test("planning failures are shown as readable alerts", async () => {
   vi.stubGlobal("fetch", vi.fn()
     .mockResolvedValueOnce({ ok: true, json: async () => [] })

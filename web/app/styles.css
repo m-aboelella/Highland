@@ -427,6 +427,12 @@ button { justify-self: end; padding: 10px 16px; color: #10231f; background: var(
 .node-editor b { color: var(--gold); font-size: 11px; text-transform: uppercase; }
 .node-editor code { color: var(--muted); font-size: 11px; }
 .workflow-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.publication-note { margin: 0; text-align: right; }
+.publication-card { display: grid; gap: 8px; padding: 13px; background: color-mix(in srgb, var(--mint) 8%, #0b1917); border: 1px solid color-mix(in srgb, var(--mint) 55%, var(--line)); border-radius: 9px; }
+.publication-card > div { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.publication-card small { color: var(--mint); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.publication-card strong { font-size: 13px; }
+.publication-card p { margin: 0; color: var(--muted); font-size: 11px; }
 .run-history { display: grid; gap: 10px; }
 .run-history article { display: grid; gap: 4px; padding: 12px; background: #0b1917; border: 1px solid var(--line); }
 .run-history-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
