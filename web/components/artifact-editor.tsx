@@ -2,10 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { apiUrl, requestJson } from "../lib/api";
 import { ArtifactAssistantPanel } from "./artifact-assistant";
 import { MarkdownPreview } from "./artifact-markdown";
-
-const API = process.env.NEXT_PUBLIC_HIGHLAND_API_URL ?? "http://127.0.0.1:8080";
 
 export type ArtifactCitation = {
   id: string;
@@ -99,20 +98,15 @@ export function ArtifactEditor({
     setSaveState("saving");
     setActionError(undefined);
     try {
-      const response = await fetch(`${API}/artifacts/${artifact.id}`, {
+      const saved = await requestJson<ArtifactDocument>(`/artifacts/${artifact.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           expected_revision: artifact.revision,
           content: nextContent,
           citations: nextCitations,
           reason,
         }),
-      });
-      if (!response.ok) {
-        throw new Error("Artifact changed elsewhere; reload before saving.");
-      }
-      const saved = (await response.json()) as ArtifactDocument;
+      }, "Artifact changed elsewhere; reload before saving.");
       setArtifact(saved);
       setContent(saved.content);
       setSaveState("saved");
@@ -129,9 +123,11 @@ export function ArtifactEditor({
   async function loadRevisions() {
     setActionError(undefined);
     try {
-      const response = await fetch(`${API}/artifacts/${artifact.id}/revisions`);
-      if (!response.ok) throw new Error("Revision history could not be loaded.");
-      const revisions = (await response.json()) as unknown[];
+      const revisions = await requestJson<unknown[]>(
+        `/artifacts/${artifact.id}/revisions`,
+        {},
+        "Revision history could not be loaded.",
+      );
       setRevisionCount(revisions.length);
     } catch (caught) {
       setActionError(caught instanceof Error ? caught.message : "Revision history is unavailable.");
@@ -141,17 +137,18 @@ export function ArtifactEditor({
   async function reviseSection() {
     setActionError(undefined);
     try {
-      const response = await fetch(`${API}/artifacts/${artifact.id}/sections/revise`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          expected_revision: artifact.revision,
-          heading: section,
-          instructions: revisionInstruction,
-        }),
-      });
-      if (!response.ok) throw new Error("Section revision could not be generated.");
-      setPreview((await response.json()) as RevisionPreview);
+      setPreview(await requestJson<RevisionPreview>(
+        `/artifacts/${artifact.id}/sections/revise`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            expected_revision: artifact.revision,
+            heading: section,
+            instructions: revisionInstruction,
+          }),
+        },
+        "Section revision could not be generated.",
+      ));
     } catch (caught) {
       setActionError(caught instanceof Error ? caught.message : "Section revision failed.");
     }
@@ -160,11 +157,11 @@ export function ArtifactEditor({
   async function checkEvidence() {
     setActionError(undefined);
     try {
-      const response = await fetch(`${API}/artifacts/${artifact.id}/evidence-coverage`, {
-        method: "POST",
-      });
-      if (!response.ok) throw new Error("Evidence coverage could not be checked.");
-      setCoverage((await response.json()) as CoverageReport);
+      setCoverage(await requestJson<CoverageReport>(
+        `/artifacts/${artifact.id}/evidence-coverage`,
+        { method: "POST" },
+        "Evidence coverage could not be checked.",
+      ));
     } catch (caught) {
       setActionError(caught instanceof Error ? caught.message : "Evidence coverage is unavailable.");
     }
@@ -214,11 +211,11 @@ export function ArtifactEditor({
       </header>
       <p className="provenance">
         From conversation {artifact.conversation_id} ·{" "}
-        <a href={`${API}/runs/${artifact.run_id}/trace`}>View originating run</a>
+        <a href={apiUrl(`/runs/${artifact.run_id}/trace`)}>View originating run</a>
         {" · "}
-        <a href={`${API}/artifacts/${artifact.id}/export.md`}>Export Markdown</a>
+        <a href={apiUrl(`/artifacts/${artifact.id}/export.md`)}>Export Markdown</a>
         {" · "}
-        <a href={`${API}/artifacts/${artifact.id}/export.pdf`}>Export PDF</a>
+        <a href={apiUrl(`/artifacts/${artifact.id}/export.pdf`)}>Export PDF</a>
       </p>
       <div className="artifact-explainer" role="note">
         <span className="artifact-explainer-icon" aria-hidden="true">A</span>

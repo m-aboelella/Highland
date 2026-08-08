@@ -2,10 +2,9 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 
+import { requestJson } from "../lib/api";
 import type { ArtifactCitation, ArtifactDocument } from "./artifact-editor";
 import { MarkdownPreview } from "./artifact-markdown";
-
-const API = process.env.NEXT_PUBLIC_HIGHLAND_API_URL ?? "http://127.0.0.1:8080";
 
 type AssistantOperation = {
   tool: "read_artifact" | "read_saved_evidence" | "propose_markdown_edit" | "write_artifact_revision";
@@ -88,23 +87,19 @@ export function ArtifactAssistantPanel({
         .filter((message) => message.id !== "welcome")
         .slice(-12)
         .map(({ role, content }) => ({ role, content }));
-      const response = await fetch(`${API}/artifacts/${artifact.id}/assistant/preview`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          expected_revision: artifact.revision,
-          instruction: nextInstruction,
-          history,
-          draft_content: preview?.proposed_content,
-        }),
-      });
-      const payload = await response.json() as AssistantPreview | { detail?: string };
-      if (!response.ok) {
-        throw new Error("detail" in payload && payload.detail
-          ? payload.detail
-          : "The artifact assistant could not prepare an edit.");
-      }
-      const result = payload as AssistantPreview;
+      const result = await requestJson<AssistantPreview>(
+        `/artifacts/${artifact.id}/assistant/preview`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            expected_revision: artifact.revision,
+            instruction: nextInstruction,
+            history,
+            draft_content: preview?.proposed_content,
+          }),
+        },
+        "The artifact assistant could not prepare an edit.",
+      );
       setPreview(result);
       setMessages((current) => [...current, {
         id: `assistant-${Date.now()}`,

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-const API = process.env.NEXT_PUBLIC_HIGHLAND_API_URL ?? "http://127.0.0.1:8080";
+import { requestJson } from "../lib/api";
 
 type AgentProfile = {
   id: string;
@@ -27,9 +27,11 @@ export function AgentsWorkspace() {
   const load = useCallback(async () => {
     setState("loading");
     try {
-      const response = await fetch(`${API}/agents`);
-      if (!response.ok) throw new Error("Agent configuration could not be loaded.");
-      const profiles = await response.json() as AgentProfile[];
+      const profiles = await requestJson<AgentProfile[]>(
+        "/agents",
+        {},
+        "Agent configuration could not be loaded.",
+      );
       if (!profiles.length) throw new Error("No agent profile is configured.");
       setProfile(profiles[0]);
       setState("ready");

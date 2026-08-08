@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { requestJson } from "../lib/api";
 import { ArtifactDocument, ArtifactEditor } from "./artifact-editor";
-
-const API = process.env.NEXT_PUBLIC_HIGHLAND_API_URL ?? "http://127.0.0.1:8080";
 
 export function ArtifactsWorkspace() {
   const [artifacts, setArtifacts] = useState<ArtifactDocument[]>([]);
@@ -14,9 +13,11 @@ export function ArtifactsWorkspace() {
   const loadArtifacts = useCallback(async () => {
     setState("loading");
     try {
-      const response = await fetch(`${API}/artifacts`);
-      if (!response.ok) throw new Error("Artifacts could not be loaded.");
-      setArtifacts(await response.json() as ArtifactDocument[]);
+      setArtifacts(await requestJson<ArtifactDocument[]>(
+        "/artifacts",
+        {},
+        "Artifacts could not be loaded.",
+      ));
       setState("ready");
     } catch {
       setState("error");

@@ -4,9 +4,8 @@ import { FormEvent, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { requestJson } from "../lib/api";
 import { SourceFilterControls } from "./source-filter-controls";
-
-const API = process.env.NEXT_PUBLIC_HIGHLAND_API_URL ?? "http://127.0.0.1:8080";
 
 const sourceLabels: Record<string, string> = {
   archive: "Archive",
@@ -73,9 +72,8 @@ export function SearchWorkspace() {
     setSearching(true);
     setError(undefined);
     try {
-      const result = await fetch(`${API}/discover/search`, {
+      const result = await requestJson<SearchResponse>("/discover/search", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query,
           filters: {
@@ -84,12 +82,8 @@ export function SearchWorkspace() {
             allowed_visibilities: [],
           },
         }),
-      });
-      if (!result.ok) {
-        const payload = await result.json().catch(() => ({})) as { detail?: string };
-        throw new Error(payload.detail ?? "Source search could not be completed.");
-      }
-      setResponse(await result.json() as SearchResponse);
+      }, "Source search could not be completed.");
+      setResponse(result);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Source search could not be completed.");
     } finally {

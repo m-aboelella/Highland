@@ -236,7 +236,7 @@ User
 | M14 — Container ingestion startup | ✅ Implemented | 1/1 | Propagate connector service URLs into ingestion MCP processes |
 | M15 — Container application configuration | ✅ Implemented | 1/1 | Resolve packaged runtime configuration from explicit image paths |
 | M16 — Container evaluation configuration | ✅ Implemented | 1/1 | Resolve retrieval evaluation artifacts through portable settings |
-| M17 — Maintainability refactor | 🟨 Partial | 1/4 | Smaller transport, UI, runtime, and provider boundaries |
+| M17 — Maintainability refactor | 🟨 Partial | 2/4 | Smaller transport, UI, runtime, and provider boundaries |
 
 ---
 
@@ -2547,7 +2547,8 @@ ruff check src/highland/api.py src/highland/http src/highland/services.py
 
 ## E17.2 — Decompose frontend feature orchestration
 
-**Status:** ⬜ Not started
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E17.1
 
 Scope:
@@ -2556,6 +2557,22 @@ Scope:
 - Extract Discover run/SSE lifecycle from presentation components.
 - Separate trace, citation, history, and workflow-run presentation components.
 - Preserve user-visible behavior and accessibility contracts.
+
+Delivered:
+
+- Centralized the API base URL, JSON requests, abort behavior, and normalized
+  error payloads in one typed client used by every workspace.
+- Reduced the Discover workspace to feature composition by extracting typed
+  contracts, run/SSE lifecycle, trace presentation, and citation/evidence UI.
+- Split workflow run results and types from the Automations editor without
+  changing its publication or test-run behavior.
+
+Verification:
+
+```bash
+cd web && npx tsc --noEmit
+cd web && npm test -- --run
+```
 
 ## E17.3 — Simplify runtime and workflow orchestration
 

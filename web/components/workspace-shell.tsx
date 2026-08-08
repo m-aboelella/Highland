@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { requestJson } from "../lib/api";
+
 type WorkspaceStatus = {
   workspace: string;
   model_mode: string;
@@ -35,12 +37,8 @@ export function WorkspaceShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(
-      `${process.env.NEXT_PUBLIC_HIGHLAND_API_URL ?? "http://127.0.0.1:8080"}/workspace/status`,
-      { signal: controller.signal },
-    )
-      .then((response) => (response.ok ? response.json() : Promise.reject(response)))
-      .then((payload: WorkspaceStatus) => {
+    requestJson<WorkspaceStatus>("/workspace/status", { signal: controller.signal })
+      .then((payload) => {
         setStatus(payload);
         setConnection("ready");
       })
