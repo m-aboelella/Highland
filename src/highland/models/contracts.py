@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from enum import StrEnum
-from typing import Literal, Protocol, runtime_checkable
+from typing import Literal, Protocol, cast, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
@@ -84,6 +84,26 @@ class Usage(ContractModel):
     def total_tokens(self) -> int | None:
         values = (self.input_tokens, self.output_tokens)
         return None if all(value is None for value in values) else sum(value or 0 for value in values)
+
+    def __add__(self, other: Usage) -> Usage:
+        """Combine usage while preserving counters unknown to both operands."""
+
+        def add_int(name: str) -> int | None:
+            first = cast(int | None, getattr(self, name))
+            second = cast(int | None, getattr(other, name))
+            return None if first is None and second is None else (first or 0) + (second or 0)
+
+        return Usage(
+            input_tokens=add_int("input_tokens"),
+            output_tokens=add_int("output_tokens"),
+            billed_input_tokens=add_int("billed_input_tokens"),
+            billed_output_tokens=add_int("billed_output_tokens"),
+            search_units=(
+                None
+                if self.search_units is None and other.search_units is None
+                else (self.search_units or 0) + (other.search_units or 0)
+            ),
+        )
 
 
 class ResponseMetadata(ContractModel):

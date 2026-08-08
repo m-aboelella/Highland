@@ -236,7 +236,7 @@ User
 | M14 — Container ingestion startup | ✅ Implemented | 1/1 | Propagate connector service URLs into ingestion MCP processes |
 | M15 — Container application configuration | ✅ Implemented | 1/1 | Resolve packaged runtime configuration from explicit image paths |
 | M16 — Container evaluation configuration | ✅ Implemented | 1/1 | Resolve retrieval evaluation artifacts through portable settings |
-| M17 — Maintainability refactor | 🟨 Partial | 2/4 | Smaller transport, UI, runtime, and provider boundaries |
+| M17 — Maintainability refactor | 🟨 Partial | 3/4 | Smaller transport, UI, runtime, and provider boundaries |
 
 ---
 
@@ -2576,7 +2576,8 @@ cd web && npm test -- --run
 
 ## E17.3 — Simplify runtime and workflow orchestration
 
-**Status:** ⬜ Not started
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E17.2
 
 Scope:
@@ -2585,6 +2586,25 @@ Scope:
 - Make agent run state and phases explicit while preserving the linear loop.
 - Type workflow nodes and tool execution through narrow protocols.
 - Extract workflow checkpoint, approval, loop, and failure transitions.
+
+Delivered:
+
+- Added one canonical `Usage` addition operation and removed four duplicate
+  implementations from runtime, workflow, and evaluation code.
+- Introduced explicit agent-run state for messages, events, timing, and usage,
+  leaving the top-level model/tool loop linear.
+- Typed workflow nodes with the schema union and extracted approval pauses,
+  loop execution, and persisted failure transitions from the main executor.
+
+Verification:
+
+```bash
+pytest tests/unit/models/test_contracts.py tests/unit/runtime tests/unit/workflows \
+  tests/integration/test_workflow_approval_and_schedule.py \
+  tests/acceptance/test_workflow_builder.py tests/unit/evaluation/test_scenarios.py
+mypy src/highland/models/contracts.py src/highland/runtime/agent.py \
+  src/highland/workflows/executor.py
+```
 
 ## E17.4 — Clarify provider and CLI boundaries
 

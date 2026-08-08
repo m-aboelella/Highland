@@ -210,7 +210,7 @@ class WeeklyCustomerHealthRunner:
                     usage=response.usage,
                 )
             )
-            totals = _add_usage(totals, response.usage)
+            totals = totals + response.usage
         artifact = self._artifact(run_id, accounts, citations)
         result = WeeklyHealthRun(
             run_id=run_id,
@@ -328,17 +328,3 @@ def _items(value: Any) -> list[dict[str, Any]]:
     if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
         raise TypeError("customer list tool did not return records")
     return items
-
-
-def _add_usage(left: Usage, right: Usage) -> Usage:
-    def add(name: str) -> int | float | None:
-        first, second = getattr(left, name), getattr(right, name)
-        return None if first is None and second is None else (first or 0) + (second or 0)
-
-    return Usage(
-        input_tokens=add("input_tokens"),
-        output_tokens=add("output_tokens"),
-        billed_input_tokens=add("billed_input_tokens"),
-        billed_output_tokens=add("billed_output_tokens"),
-        search_units=add("search_units"),
-    )

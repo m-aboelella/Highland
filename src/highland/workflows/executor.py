@@ -32,6 +32,8 @@ from .schema import (
     ToolNode,
     TriggerNode,
     WorkflowDefinition,
+    WorkflowEdge,
+    WorkflowNode,
 )
 
 
@@ -127,7 +129,7 @@ class WorkflowExecutor:
         self,
         *,
         model: ChatModel,
-        tools: ToolRegistry | Any,
+        tools: ToolRegistry,
         repository: WorkflowRunRepository,
         retriever: Retriever | None = None,
         budgets: WorkflowBudgets | None = None,
@@ -188,96 +190,25 @@ class WorkflowExecutor:
                     record.completed_at = datetime.now(UTC)
                     self._save(run)
                     continue
-                if isinstance(node, ApprovalNode) and node.id not in approved_nodes:
-                    if self.approvals is None:
-                        record.status = NodeRunStatus.WAITING_APPROVAL
-                        record.inputs = {"tool_node_id": node.tool_node_id, "reason": node.reason}
-                        run.status = WorkflowRunStatus.PAUSED
-                        self._save(run)
-                        return run
-                    approval_id = (
-                        record.output.get("approval_id")
-                        if isinstance(record.output, dict)
-                        else None
-                    )
-                    if approval_id is None:
-                        tool_node = next(
-                            item
-                            for item in definition.nodes
-                            if isinstance(item, ToolNode) and item.id == node.tool_node_id
-                        )
-                        arguments = _node_inputs(tool_node, run)
-                        checked = self.tools.validate(
-                            tool_node.tool,
-                            arguments,
-                            run_id=run.id,
-                            logical_step_id=tool_node.id,
-                            scope=scope,
-                        )
-                        approval = self.approvals.create(
-                            run_id=run.id,
-                            tool_call_id=tool_node.id,
-                            call=checked,
-                            reason=node.reason,
-                        )
-                        approval_id = approval.id
-                        record.output = {
-                            "approval_id": approval.id,
-                            "tool_node_id": node.tool_node_id,
-                        }
-                    approval = self.approvals.get(approval_id)
-                    if approval.status in (ApprovalStatus.PENDING, ApprovalStatus.EXPIRED):
-                        record.status = NodeRunStatus.WAITING_APPROVAL
-                        record.inputs = {"tool_node_id": node.tool_node_id, "reason": node.reason}
-                        run.status = WorkflowRunStatus.PAUSED
-                        self._save(run)
-                        return run
-                    if approval.status is ApprovalStatus.REJECTED:
-                        raise RuntimeError(
-                            f"workflow approval rejected: {approval.decision_reason or 'no reason'}"
-                        )
+                if (
+                    isinstance(node, ApprovalNode)
+                    and node.id not in approved_nodes
+                    and self._pause_for_approval(definition, node, run, scope)
+                ):
+                    return run
                 record.status = NodeRunStatus.RUNNING
                 record.attempts += 1
                 record.started_at = datetime.now(UTC)
                 node_started = time.monotonic()
                 try:
-                    loop_edge = next((edge for edge in active if edge.loop_over), None)
-                    if loop_edge:
-                        records = resolve_reference(loop_edge.loop_over, run)
-                        if not isinstance(records, list):
-                            raise TypeError("workflow loop input must be a list")
-                        if len(records) > loop_edge.max_iterations:
-                            raise RuntimeError(
-                                f"workflow loop exceeds {loop_edge.max_iterations} iterations"
-                            )
-                        iterations = []
-                        total_usage = Usage(input_tokens=0, output_tokens=0)
-                        for index, item in enumerate(records):
-                            inputs = _node_inputs(node, run, loop_item=item)
-                            isolated_scope = _loop_scope(scope, item)
-                            output, usage = await self._execute_node(
-                                node, inputs=inputs, run=run, scope=isolated_scope
-                            )
-                            iterations.append(
-                                {"index": index, "record": item, "output": output}
-                            )
-                            total_usage = _add_usage(total_usage, usage)
-                        record.inputs = {"iterations": [item["record"] for item in iterations]}
-                        output, usage = iterations, total_usage
-                    else:
-                        inputs = _node_inputs(node, run)
-                        record.inputs = inputs
-                        output, usage = await self._execute_node(
-                            node, inputs=inputs, run=run, scope=scope
-                        )
+                    output, usage = await self._execute_with_loop(
+                        node,
+                        active=active,
+                        run=run,
+                        scope=scope,
+                    )
                 except Exception as error:  # noqa: BLE001 - persist bounded workflow failures
-                    record.status = NodeRunStatus.FAILED
-                    record.error = f"{type(error).__name__}: {error}"[:2000]
-                    record.completed_at = datetime.now(UTC)
-                    record.duration_ms = (time.monotonic() - node_started) * 1000
-                    run.status = WorkflowRunStatus.FAILED
-                    run.error = record.error
-                    self._save(run)
+                    self._fail_node(run, record, error, started_at=node_started)
                     return run
                 record.output = output
                 record.usage = usage
@@ -286,17 +217,123 @@ class WorkflowExecutor:
                 record.duration_ms = (time.monotonic() - node_started) * 1000
                 self._save(run)
         except Exception as error:  # noqa: BLE001 - persist bounded workflow failures
-            run.status = WorkflowRunStatus.FAILED
-            run.error = f"{type(error).__name__}: {error}"[:2000]
-            self._save(run)
+            self._fail_run(run, error)
             return run
         run.status = WorkflowRunStatus.COMPLETED
         self._save(run)
         return run
 
+    def _pause_for_approval(
+        self,
+        definition: WorkflowDefinition,
+        node: ApprovalNode,
+        run: WorkflowRun,
+        scope: RunScope,
+    ) -> bool:
+        record = run.nodes[node.id]
+        if self.approvals is None:
+            self._mark_waiting_for_approval(run, record, node)
+            return True
+        approval_id = record.output.get("approval_id") if isinstance(record.output, dict) else None
+        if approval_id is None:
+            tool_node = next(
+                item
+                for item in definition.nodes
+                if isinstance(item, ToolNode) and item.id == node.tool_node_id
+            )
+            checked = self.tools.validate(
+                tool_node.tool,
+                _node_inputs(tool_node, run),
+                run_id=run.id,
+                logical_step_id=tool_node.id,
+                scope=scope,
+            )
+            approval = self.approvals.create(
+                run_id=run.id,
+                tool_call_id=tool_node.id,
+                call=checked,
+                reason=node.reason,
+            )
+            approval_id = approval.id
+            record.output = {"approval_id": approval.id, "tool_node_id": node.tool_node_id}
+        approval = self.approvals.get(approval_id)
+        if approval.status in (ApprovalStatus.PENDING, ApprovalStatus.EXPIRED):
+            self._mark_waiting_for_approval(run, record, node)
+            return True
+        if approval.status is ApprovalStatus.REJECTED:
+            raise RuntimeError(
+                f"workflow approval rejected: {approval.decision_reason or 'no reason'}"
+            )
+        return False
+
+    def _mark_waiting_for_approval(
+        self,
+        run: WorkflowRun,
+        record: NodeRun,
+        node: ApprovalNode,
+    ) -> None:
+        record.status = NodeRunStatus.WAITING_APPROVAL
+        record.inputs = {"tool_node_id": node.tool_node_id, "reason": node.reason}
+        run.status = WorkflowRunStatus.PAUSED
+        self._save(run)
+
+    async def _execute_with_loop(
+        self,
+        node: WorkflowNode,
+        *,
+        active: list[WorkflowEdge],
+        run: WorkflowRun,
+        scope: RunScope,
+    ) -> tuple[Any, Usage]:
+        loop_edge = next((edge for edge in active if edge.loop_over), None)
+        if loop_edge is None or loop_edge.loop_over is None:
+            inputs = _node_inputs(node, run)
+            run.nodes[node.id].inputs = inputs
+            return await self._execute_node(node, inputs=inputs, run=run, scope=scope)
+        records = resolve_reference(loop_edge.loop_over, run)
+        if not isinstance(records, list):
+            raise TypeError("workflow loop input must be a list")
+        if len(records) > loop_edge.max_iterations:
+            raise RuntimeError(f"workflow loop exceeds {loop_edge.max_iterations} iterations")
+        iterations = []
+        total_usage = Usage(input_tokens=0, output_tokens=0)
+        for index, item in enumerate(records):
+            inputs = _node_inputs(node, run, loop_item=item)
+            output, usage = await self._execute_node(
+                node,
+                inputs=inputs,
+                run=run,
+                scope=_loop_scope(scope, item),
+            )
+            iterations.append({"index": index, "record": item, "output": output})
+            total_usage = total_usage + usage
+        run.nodes[node.id].inputs = {"iterations": [item["record"] for item in iterations]}
+        return iterations, total_usage
+
+    def _fail_node(
+        self,
+        run: WorkflowRun,
+        record: NodeRun,
+        error: Exception,
+        *,
+        started_at: float,
+    ) -> None:
+        record.status = NodeRunStatus.FAILED
+        record.error = f"{type(error).__name__}: {error}"[:2000]
+        record.completed_at = datetime.now(UTC)
+        record.duration_ms = (time.monotonic() - started_at) * 1000
+        run.status = WorkflowRunStatus.FAILED
+        run.error = record.error
+        self._save(run)
+
+    def _fail_run(self, run: WorkflowRun, error: Exception) -> None:
+        run.status = WorkflowRunStatus.FAILED
+        run.error = f"{type(error).__name__}: {error}"[:2000]
+        self._save(run)
+
     async def _execute_node(
         self,
-        node: Any,
+        node: WorkflowNode,
         *,
         inputs: dict[str, Any],
         run: WorkflowRun,
@@ -433,7 +470,12 @@ def resolve_input(value: NodeInput, run: WorkflowRun, *, loop_item: Any = None) 
     )
 
 
-def _node_inputs(node: Any, run: WorkflowRun, *, loop_item: Any = None) -> dict[str, Any]:
+def _node_inputs(
+    node: WorkflowNode,
+    run: WorkflowRun,
+    *,
+    loop_item: Any = None,
+) -> dict[str, Any]:
     resolved = {
         name: resolve_input(value, run, loop_item=loop_item)
         for name, value in node.inputs.items()
@@ -502,22 +544,7 @@ def _loop_scope(scope: RunScope, item: Any) -> RunScope:
     )
 
 
-def _add_usage(left: Usage, right: Usage) -> Usage:
-    def add(name: str) -> int | float | None:
-        first = getattr(left, name)
-        second = getattr(right, name)
-        return None if first is None and second is None else (first or 0) + (second or 0)
-
-    return Usage(
-        input_tokens=add("input_tokens"),
-        output_tokens=add("output_tokens"),
-        billed_input_tokens=add("billed_input_tokens"),
-        billed_output_tokens=add("billed_output_tokens"),
-        search_units=add("search_units"),
-    )
-
-
-def _ordered_nodes(definition: WorkflowDefinition) -> list[Any]:
+def _ordered_nodes(definition: WorkflowDefinition) -> list[WorkflowNode]:
     nodes = {node.id: node for node in definition.nodes}
     incoming = {node_id: 0 for node_id in nodes}
     outgoing: dict[str, list[str]] = {node_id: [] for node_id in nodes}
@@ -525,7 +552,7 @@ def _ordered_nodes(definition: WorkflowDefinition) -> list[Any]:
         incoming[edge.target] += 1
         outgoing[edge.source].append(edge.target)
     ready = sorted(node_id for node_id, count in incoming.items() if count == 0)
-    ordered = []
+    ordered: list[WorkflowNode] = []
     while ready:
         node_id = ready.pop(0)
         ordered.append(nodes[node_id])

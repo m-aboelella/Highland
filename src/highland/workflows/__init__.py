@@ -21,6 +21,7 @@ from .schema import (
     ValueType,
     WorkflowDefinition,
     WorkflowEdge,
+    WorkflowNode,
     WorkflowVersion,
 )
 from .weekly_health import (
@@ -52,6 +53,7 @@ __all__ = [
     "WorkflowDraft",
     "WorkflowEdge",
     "WorkflowExecutor",
+    "WorkflowNode",
     "WorkflowPlanner",
     "WorkflowPlanningError",
     "WorkflowRepository",

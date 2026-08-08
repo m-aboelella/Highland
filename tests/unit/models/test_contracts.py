@@ -82,3 +82,13 @@ def test_request_round_trip_preserves_capability_requirements() -> None:
 
     assert restored.required_capabilities.reasoning
     assert restored.required_capabilities.streaming
+
+
+def test_usage_addition_preserves_unknown_and_known_counters() -> None:
+    combined = Usage(input_tokens=10, search_units=1.5) + Usage(
+        input_tokens=5,
+        output_tokens=3,
+    )
+
+    assert combined == Usage(input_tokens=15, output_tokens=3, search_units=1.5)
+    assert Usage() + Usage() == Usage()

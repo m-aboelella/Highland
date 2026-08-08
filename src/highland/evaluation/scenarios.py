@@ -32,20 +32,6 @@ from .scenario_reports import (
 )
 
 
-def _add_usage(left: Usage, right: Usage) -> Usage:
-    def add(name: str) -> int | float | None:
-        first, second = getattr(left, name), getattr(right, name)
-        return None if first is None and second is None else (first or 0) + (second or 0)
-
-    return Usage(
-        input_tokens=add("input_tokens"),
-        output_tokens=add("output_tokens"),
-        billed_input_tokens=add("billed_input_tokens"),
-        billed_output_tokens=add("billed_output_tokens"),
-        search_units=add("search_units"),
-    )
-
-
 class LiveScenarioEvaluator:
     """Grade scenarios after executing the application's production orchestration paths."""
 
@@ -70,7 +56,7 @@ class LiveScenarioEvaluator:
         score_names = sorted({name for run in runs for name in run.semantic_scores})
         totals = Usage()
         for run in runs:
-            totals = _add_usage(totals, run.usage)
+            totals = totals + run.usage
         aggregate = ScenarioEvaluation(
             scenario_id=runs[0].scenario_id,
             repeat=repeat,
@@ -119,7 +105,7 @@ class LiveScenarioEvaluator:
             run_id=run_id,
             failures=failures,
         )
-        usage = _add_usage(usage, judge_usage)
+        usage = usage + judge_usage
         if any(score < 0.7 for score in semantic_scores.values()):
             failures.append("one or more semantic scores fell below 0.70")
         estimated_cost = None
@@ -221,7 +207,7 @@ class LiveScenarioEvaluator:
         )
         return (
             assistant_text or outcome.content,
-            _add_usage(outcome.usage, rerank_usage),
+            outcome.usage + rerank_usage,
             events,
             failures,
         )

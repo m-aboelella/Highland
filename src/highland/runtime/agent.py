@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from highland.models.contracts import (
     ChatModel,
     ChatRequest,
+    ChatResponse,
     Citation,
     Document,
     FinishReason,
@@ -88,6 +89,58 @@ class RunRepository:
         return json.loads((self.directory / f"{run_id}.state.json").read_text(encoding="utf-8"))
 
 
+@dataclass(slots=True)
+class AgentRunState:
+    """Mutable state for one linear agent run."""
+
+    messages: list[Message]
+    events: list[dict[str, Any]]
+    started_at: float
+    usage: Usage
+
+    @classmethod
+    def start(
+        cls,
+        *,
+        run_id: str,
+        instructions: str,
+        user_message: str,
+        prior_messages: list[Message],
+    ) -> AgentRunState:
+        return cls(
+            messages=[
+                Message(role=MessageRole.SYSTEM, content=instructions),
+                *prior_messages,
+                Message(role=MessageRole.USER, content=user_message),
+            ],
+            events=[{"type": "run_started", "run_id": run_id}],
+            started_at=time.monotonic(),
+            usage=Usage(input_tokens=0, output_tokens=0),
+        )
+
+    def record_model_response(self, response: ChatResponse, *, step: int) -> None:
+        self.events.append(
+            {
+                "type": "model_call",
+                "step": step,
+                "finish_reason": response.finish_reason.value,
+                "tool_calls": [
+                    call.model_dump(mode="json") for call in response.message.tool_calls
+                ],
+                "usage": response.usage.model_dump(mode="json"),
+            }
+        )
+        self.events.append(
+            {"type": "usage", "step": step, **response.usage.model_dump(mode="json")}
+        )
+        self.events.extend(
+            {"type": "citation", **citation.model_dump(mode="json")}
+            for citation in response.citations
+        )
+        self.usage = self.usage + response.usage
+        self.messages.append(response.message)
+
+
 class AgentLoop:
     def __init__(
         self,
@@ -117,21 +170,21 @@ class AgentLoop:
         prior_messages: list[Message] | None = None,
     ) -> RunOutcome:
         scope = scope or RunScope()
-        messages = [Message(role=MessageRole.SYSTEM, content=self.profile.instructions)]
-        messages.extend(prior_messages or [])
-        messages.append(Message(role=MessageRole.USER, content=user_message))
-        events: list[dict[str, Any]] = [{"type": "run_started", "run_id": run_id}]
-        started = time.monotonic()
-        totals = Usage(input_tokens=0, output_tokens=0)
+        state = AgentRunState.start(
+            run_id=run_id,
+            instructions=self.profile.instructions,
+            user_message=user_message,
+            prior_messages=prior_messages or [],
+        )
         for step in range(1, self.profile.budgets.max_steps + 1):
             if self.cancellations and self.cancellations.is_cancelled(run_id):
-                return self._cancel(run_id, messages, events, totals)
+                return self._cancel(run_id, state)
             if step > self.profile.budgets.max_model_calls:
                 break
-            if time.monotonic() - started >= self.profile.budgets.max_wall_seconds:
+            if time.monotonic() - state.started_at >= self.profile.budgets.max_wall_seconds:
                 break
             request = ChatRequest(
-                messages=self._bounded_messages(messages),
+                messages=self._bounded_messages(state.messages),
                 tools=(
                     self.tools.model_tools(scope)
                     if isinstance(self.tools, ToolRegistry)
@@ -143,50 +196,31 @@ class AgentLoop:
             )
             response = await self.model.chat(request)
             if self.cancellations and self.cancellations.is_cancelled(run_id):
-                return self._cancel(run_id, messages, events, totals)
-            events.append(
-                {
-                    "type": "model_call",
-                    "step": step,
-                    "finish_reason": response.finish_reason.value,
-                    "tool_calls": [
-                        call.model_dump(mode="json") for call in response.message.tool_calls
-                    ],
-                    "usage": response.usage.model_dump(mode="json"),
-                }
-            )
-            events.append(
-                {
-                    "type": "usage",
-                    "step": step,
-                    **response.usage.model_dump(mode="json"),
-                }
-            )
-            events.extend(
-                {"type": "citation", **citation.model_dump(mode="json")}
-                for citation in response.citations
-            )
-            totals = _add_usage(totals, response.usage)
-            messages.append(response.message)
+                return self._cancel(run_id, state)
+            state.record_model_response(response, step=step)
             if not response.message.tool_calls:
                 if response.message.content:
-                    events.append({"type": "model_delta", "text": response.message.content})
-                events.append({"type": "final", "content": response.message.content})
+                    state.events.append(
+                        {"type": "model_delta", "text": response.message.content}
+                    )
+                state.events.append({"type": "final", "content": response.message.content})
                 outcome = RunOutcome(
                     run_id=run_id,
                     status=RunStatus.COMPLETED,
                     content=response.message.content,
                     finish_reason=response.finish_reason,
                     citations=response.citations,
-                    usage=totals,
+                    usage=state.usage,
                 )
-                self._save(run_id, messages, events, outcome)
+                self._save(run_id, state.messages, state.events, outcome)
                 return outcome
 
             validated: list[tuple[Any, ValidatedToolCall]] = []
             immediate: list[ToolResult] = []
             for call in response.message.tool_calls:
-                events.append({"type": "tool_call", "tool_call": call.model_dump(mode="json")})
+                state.events.append(
+                    {"type": "tool_call", "tool_call": call.model_dump(mode="json")}
+                )
                 try:
                     checked = self.tools.validate(
                         call.name,
@@ -215,64 +249,67 @@ class AgentLoop:
                         if self.approvals
                         else None
                     )
+                    pending_call = {
+                        "tool_call_id": call.id,
+                        "tool": checked.qualified_name,
+                        "arguments": checked.arguments,
+                        "idempotency_key": checked.idempotency_key,
+                        "approval_id": approval.id if approval else None,
+                    }
                     outcome = RunOutcome(
                         run_id=run_id,
                         status=RunStatus.PAUSED,
                         finish_reason=FinishReason.TOOL_CALL,
-                        usage=totals,
-                        pending_call={
-                            "tool_call_id": call.id,
-                            "tool": checked.qualified_name,
-                            "arguments": checked.arguments,
-                            "idempotency_key": checked.idempotency_key,
-                            "approval_id": approval.id if approval else None,
-                        },
+                        usage=state.usage,
+                        pending_call=pending_call,
                     )
-                    events.append({"type": "approval_required", **outcome.pending_call})
-                    self._save(run_id, messages, events, outcome)
+                    state.events.append({"type": "approval_required", **pending_call})
+                    self._save(run_id, state.messages, state.events, outcome)
                     return outcome
                 validated.append((call, checked))
             executed = await asyncio.gather(
                 *(self.tools.execute(checked) for _, checked in validated)
             )
             tool_results = list(immediate)
-            for (call, _), result in zip(validated, executed, strict=True):
+            for (call, _), normalized_result in zip(validated, executed, strict=True):
                 tool_results.append(
                     ToolResult(
                         tool_call_id=call.id,
-                        content=result.content[: self.profile.budgets.max_tool_result_chars],
-                        is_error=result.is_error,
+                        content=normalized_result.content[
+                            : self.profile.budgets.max_tool_result_chars
+                        ],
+                        is_error=normalized_result.is_error,
                     )
                 )
-            for result in tool_results:
-                events.append({"type": "tool_result", **result.model_dump(mode="json")})
-            messages.append(Message(role=MessageRole.TOOL, tool_results=tool_results))
-            self._save(run_id, messages, events, None)
+            for tool_result in tool_results:
+                state.events.append(
+                    {"type": "tool_result", **tool_result.model_dump(mode="json")}
+                )
+            state.messages.append(Message(role=MessageRole.TOOL, tool_results=tool_results))
+            self._save(run_id, state.messages, state.events, None)
         outcome = RunOutcome(
             run_id=run_id,
             status=RunStatus.MAX_STEPS,
             finish_reason=FinishReason.ERROR,
-            usage=totals,
+            usage=state.usage,
         )
-        events.append({"type": "run_failed", "reason": "maximum steps or runtime budget"})
-        self._save(run_id, messages, events, outcome)
+        state.events.append({"type": "run_failed", "reason": "maximum steps or runtime budget"})
+        self._save(run_id, state.messages, state.events, outcome)
         return outcome
 
     def _cancel(
         self,
         run_id: str,
-        messages: list[Message],
-        events: list[dict[str, Any]],
-        usage: Usage,
+        state: AgentRunState,
     ) -> RunOutcome:
         outcome = RunOutcome(
             run_id=run_id,
             status=RunStatus.CANCELLED,
             finish_reason=FinishReason.ERROR,
-            usage=usage,
+            usage=state.usage,
         )
-        events.append({"type": "run_cancelled", "reason": "cancelled by user"})
-        self._save(run_id, messages, events, outcome)
+        state.events.append({"type": "run_cancelled", "reason": "cancelled by user"})
+        self._save(run_id, state.messages, state.events, outcome)
         return outcome
 
     async def resume_after_approval(
@@ -344,7 +381,7 @@ class AgentLoop:
             content=response.message.content,
             finish_reason=response.finish_reason,
             citations=response.citations,
-            usage=_add_usage(previous.usage, response.usage),
+            usage=previous.usage + response.usage,
         )
         self._save(run_id, messages, events, outcome)
         return outcome
@@ -386,18 +423,3 @@ class AgentLoop:
                 "outcome": outcome.model_dump(mode="json") if outcome else None,
             },
         )
-
-
-def _add_usage(left: Usage, right: Usage) -> Usage:
-    def add(name: str) -> int | float | None:
-        first = getattr(left, name)
-        second = getattr(right, name)
-        return None if first is None and second is None else (first or 0) + (second or 0)
-
-    return Usage(
-        input_tokens=add("input_tokens"),
-        output_tokens=add("output_tokens"),
-        billed_input_tokens=add("billed_input_tokens"),
-        billed_output_tokens=add("billed_output_tokens"),
-        search_units=add("search_units"),
-    )
