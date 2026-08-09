@@ -78,12 +78,18 @@ agent runtime, approvals, traces, artifacts, and workflows once. The HTTP API
 and evaluation commands both use this object, so evaluation does not maintain a
 second simplified platform.
 
-`src/highland/api.py` registers four teaching surfaces—Discover and runs,
-artifacts, workflows, and platform operations—without changing their public
-URLs. Business behavior remains in the corresponding service modules. The
-agent loop in `src/highland/runtime/agent.py` stays deliberately linear: model
-call, validated tool request, policy and approval decision, tool result, and
-final grounded response.
+`src/highland/api.py` composes four router modules under `src/highland/http/`—
+Discover and runs, artifacts, workflows, and platform operations—without
+changing their public URLs. Business behavior remains in the corresponding
+service modules. The agent loop in `src/highland/runtime/agent.py` stays
+deliberately linear: model call, validated tool request, policy and approval
+decision, tool result, and final grounded response.
+
+The web workspace follows the same feature boundaries. A shared typed client
+owns HTTP error handling, while Discover keeps run/SSE lifecycle, trace
+presentation, and citation evidence in separate modules. Cohere's public model
+adapter import remains stable, with SDK mapping, chat/streaming, and search
+capabilities separated internally.
 
 Each fictional source under `src/highland_mocks/systems/` owns its seed
 fragment, REST routes, and FastMCP tool registration. Shared storage, errors,

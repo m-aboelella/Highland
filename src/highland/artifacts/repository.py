@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import os
 import re
 import shutil
@@ -84,7 +85,7 @@ class ArtifactRepository:
         conversation_id: str,
         run_id: str,
         message_id: str | None = None,
-        citations: list[ArtifactCitation] | None = None,
+        citations: builtins.list[ArtifactCitation] | None = None,
     ) -> Artifact:
         artifact = Artifact(
             title=title.strip(),
@@ -119,7 +120,7 @@ class ArtifactRepository:
         expected_revision: int,
         title: str | None = None,
         content: str | None = None,
-        citations: list[ArtifactCitation] | None = None,
+        citations: builtins.list[ArtifactCitation] | None = None,
         reason: str = "manual edit",
     ) -> Artifact:
         artifact = self.get(artifact_id)
@@ -145,7 +146,7 @@ class ArtifactRepository:
             raise FileNotFoundError(artifact_id)
         shutil.rmtree(directory)
 
-    def revisions(self, artifact_id: str) -> list[ArtifactRevision]:
+    def revisions(self, artifact_id: str) -> builtins.list[ArtifactRevision]:
         revisions_dir = self._artifact_dir(artifact_id) / "revisions"
         if not revisions_dir.exists():
             raise FileNotFoundError(artifact_id)

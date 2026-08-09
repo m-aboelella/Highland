@@ -190,9 +190,8 @@ def create_artifact_router(services: ApplicationServices) -> APIRouter:
     @router.get("/artifacts/{artifact_id}/revisions")
     async def list_artifact_revisions(artifact_id: str) -> list[dict[str, object]]:
         try:
-            return [
-                revision.model_dump(mode="json") for revision in artifacts.revisions(artifact_id)
-            ]
+            history = artifacts.revisions(artifact_id)
+            return [item.model_dump(mode="json") for item in history]
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="Artifact not found") from None
 

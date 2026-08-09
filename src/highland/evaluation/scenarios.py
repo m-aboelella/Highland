@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from pydantic import JsonValue
+
 from highland.discover.service import ChatRequest, DiscoverFilters
 from highland.models.contracts import (
     ChatModel,
@@ -338,7 +340,7 @@ class LiveScenarioEvaluator:
             manifest.get("forbidden_behavior", [])
             or manifest.get("expected_behavior", [])
         )
-        schema = {
+        schema: dict[str, JsonValue] = {
             "type": "object",
             "properties": {
                 "claim_scores": {
@@ -384,15 +386,20 @@ class LiveScenarioEvaluator:
         if not isinstance(judged, dict):
             failures.append("semantic judge did not return structured output")
             judged = {}
-        claim_scores = [float(value) for value in judged.get("claim_scores", [])]
+        raw_claim_scores = judged.get("claim_scores", [])
+        claim_scores = (
+            [float(value) for value in raw_claim_scores if isinstance(value, (int, float))]
+            if isinstance(raw_claim_scores, list)
+            else []
+        )
         if len(claim_scores) != len(claims):
             failures.append("semantic judge returned the wrong claim count")
         scores = {
             "expected_claims": (
                 sum(claim_scores) / len(claim_scores) if claim_scores else (1.0 if not claims else 0)
             ),
-            "behavior": float(judged.get("behavior_score", 0)),
-            "final_structure": float(judged.get("final_structure_score", 0)),
+            "behavior": _numeric_score(judged.get("behavior_score")),
+            "final_structure": _numeric_score(judged.get("final_structure_score")),
         }
         return (
             scores,
@@ -400,3 +407,7 @@ class LiveScenarioEvaluator:
             response.metadata.model,
             response.metadata.request_id,
         )
+
+
+def _numeric_score(value: JsonValue) -> float:
+    return float(value) if isinstance(value, (int, float)) else 0.0

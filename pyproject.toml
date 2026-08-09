@@ -59,12 +59,26 @@ target-version = "py311"
 [tool.mypy]
 python_version = "3.13"
 files = [
+  "src/highland/api.py",
+  "src/highland/artifacts/repository.py",
+  "src/highland/cli.py",
+  "src/highland/cli_commands.py",
+  "src/highland/evaluation/scenarios.py",
+  "src/highland/http",
+  "src/highland/models/cohere.py",
+  "src/highland/models/cohere_chat.py",
+  "src/highland/models/cohere_mapping.py",
+  "src/highland/models/cohere_search.py",
   "src/highland/models/contracts.py",
   "src/highland/maintenance.py",
   "src/highland/repository_quality.py",
+  "src/highland/runtime/agent.py",
   "src/highland/settings.py",
   "src/highland/runtime/events.py",
+  "src/highland/services.py",
+  "src/highland/workflows/executor.py",
   "src/highland/workflows/schema.py",
+  "src/highland/workflows/weekly_health.py",
   "src/highland_mocks",
 ]
 warn_unused_configs = true

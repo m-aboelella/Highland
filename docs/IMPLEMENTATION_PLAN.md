@@ -236,7 +236,7 @@ User
 | M14 — Container ingestion startup | ✅ Implemented | 1/1 | Propagate connector service URLs into ingestion MCP processes |
 | M15 — Container application configuration | ✅ Implemented | 1/1 | Resolve packaged runtime configuration from explicit image paths |
 | M16 — Container evaluation configuration | ✅ Implemented | 1/1 | Resolve retrieval evaluation artifacts through portable settings |
-| M17 — Maintainability refactor | 🟨 Partial | 3/4 | Smaller transport, UI, runtime, and provider boundaries |
+| M17 — Maintainability refactor | ✅ Implemented | 4/4 | Smaller transport, UI, runtime, and provider boundaries |
 
 ---
 
@@ -2518,7 +2518,7 @@ Delivered:
 
 # M17 — Maintainability refactor
 
-**Milestone status:** 🟨 Partial
+**Milestone status:** ✅ Implemented
 **Milestone outcome:** Highland keeps its public behavior while the main HTTP,
 frontend, orchestration, and provider hotspots become easier to read and test.
 
@@ -2608,7 +2608,8 @@ mypy src/highland/models/contracts.py src/highland/runtime/agent.py \
 
 ## E17.4 — Clarify provider and CLI boundaries
 
-**Status:** ⬜ Not started
+**Status:** ✅ Implemented
+**Implemented in:** this commit
 **Depends on:** E17.3
 
 Scope:
@@ -2617,6 +2618,26 @@ Scope:
   while preserving current imports.
 - Dispatch CLI commands through focused handlers sharing configured services.
 - Expand MyPy coverage to every refactored module.
+
+Delivered:
+
+- Kept `highland.models.cohere` stable as a facade while separating SDK
+  mapping/retry behavior, chat/streaming, and embedding/reranking adapters.
+- Reduced the CLI entrypoint to parsing and dispatch, with operational,
+  indexing, backup, usage, and evaluation behavior in focused handlers.
+- Expanded configured MyPy coverage from 21 to 40 source files, including all
+  M17 backend modules, and corrected an annotation shadowed by a repository
+  method named `list`.
+
+Verification:
+
+```bash
+pytest tests/unit/models/test_cohere_mapping.py tests/unit/evaluation/test_retrieval.py \
+  tests/unit/test_maintenance.py tests/unit/test_settings.py \
+  tests/integration/test_artifact_repository.py
+ruff check .
+mypy
+```
 
 ---
 
