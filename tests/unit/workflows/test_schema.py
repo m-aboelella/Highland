@@ -103,3 +103,8 @@ def test_repository_keeps_published_versions_immutable_and_readable(tmp_path: Pa
     assert '"kind": "approval"' in (
         tmp_path / draft.id / "versions" / "1.json"
     ).read_text("utf-8")
+
+    repository.delete(draft.id)
+    assert not (tmp_path / draft.id).exists()
+    with pytest.raises(FileNotFoundError):
+        repository.get_draft(draft.id)

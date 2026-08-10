@@ -6,7 +6,15 @@ import remarkGfm from "remark-gfm";
 import { apiUrl } from "../../lib/api";
 import { WorkflowRun as Run } from "./types";
 
-export function RunResult({ run }: { run: Run }) {
+export function RunResult({
+  run,
+  onPublish,
+  publishing = false,
+}: {
+  run: Run;
+  onPublish?: () => void;
+  publishing?: boolean;
+}) {
   const output = customerOutput(run);
   const completed = Object.values(run.nodes).filter((node) => node.status === "completed").length;
   const total = Object.keys(run.nodes).length;
@@ -52,6 +60,33 @@ export function RunResult({ run }: { run: Run }) {
         </section>
       )}
 
+      {run.test && run.status === "completed" && run.workflow_snapshot && (
+        <div className="run-publish-action">
+          <div>
+            <strong>
+              {run.published_version
+                ? `Published as version ${run.published_version}`
+                : "Happy with this result?"}
+            </strong>
+            <p>
+              {run.published_version
+                ? "This exact tested workflow is saved in Published automations."
+                : "Publish the exact workflow snapshot that produced this result."}
+            </p>
+          </div>
+          <button
+            disabled={publishing || Boolean(run.published_version) || !onPublish}
+            onClick={onPublish}
+          >
+            {publishing
+              ? "Publishing…"
+              : run.published_version
+                ? `Published v${run.published_version}`
+                : "Publish this test"}
+          </button>
+        </div>
+      )}
+
       {(run.error || failedNode?.error) && (
         <div className="run-result-error">
           <strong>What needs attention</strong>
@@ -81,6 +116,8 @@ export function RunResult({ run }: { run: Run }) {
 
 function PreviewValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
   if (typeof value === "string") {
+    const parsed = parseStructuredText(value);
+    if (parsed !== null) return <PreviewValue value={parsed} depth={depth} />;
     return (
       <div className="markdown-answer customer-preview-content">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
@@ -112,6 +149,16 @@ function PreviewValue({ value, depth = 0 }: { value: unknown; depth?: number }) 
     );
   }
   return <span>{value === null || value === undefined ? "Not provided" : String(value)}</span>;
+}
+
+function parseStructuredText(value: string): unknown | null {
+  const stripped = value.trim();
+  if (!(stripped.startsWith("{") || stripped.startsWith("["))) return null;
+  try {
+    return JSON.parse(stripped) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 function customerOutput(run: Run): unknown | null {

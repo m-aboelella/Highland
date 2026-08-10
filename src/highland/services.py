@@ -193,6 +193,7 @@ class ApplicationServices:
                 run_id=run_id,
                 workflow_version=workflow_version,
                 trigger=trigger,
+                test=test,
             )
         node_kinds = {node.id: node.kind for node in definition.nodes}
         for node in run.nodes.values():

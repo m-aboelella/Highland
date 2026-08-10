@@ -8,6 +8,24 @@ export type Workflow = {
   edges: Array<{ source: string; target: string }>;
 };
 
+export type WorkflowVersion = {
+  workflow_id: string;
+  version: number;
+  definition: Workflow;
+  published_at: string;
+};
+
+export type PublishedWorkflow = {
+  workflow_id: string;
+  name: string;
+  description: string;
+  latest_version: number;
+  version_count: number;
+  published_at: string;
+  step_count: number;
+  active_schedule_count: number;
+};
+
 export type WorkflowRun = {
   id: string;
   workflow_id: string;
@@ -25,4 +43,7 @@ export type WorkflowRun = {
   tool_calls?: number;
   started_at?: string;
   updated_at?: string;
+  test?: boolean;
+  workflow_snapshot?: Workflow | null;
+  published_version?: number | null;
 };

@@ -93,6 +93,9 @@ class WorkflowRun(ExecutionModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     error: str | None = None
     trigger: dict[str, Any] = Field(default_factory=dict)
+    test: bool = False
+    workflow_snapshot: WorkflowDefinition | None = None
+    published_version: int | None = Field(default=None, ge=1)
 
 
 class WorkflowRunRepository:
@@ -149,6 +152,7 @@ class WorkflowExecutor:
         run_id: str,
         workflow_version: int = 0,
         trigger: dict[str, Any] | None = None,
+        test: bool = False,
         scope: RunScope | None = None,
         approved_nodes: set[str] | None = None,
     ) -> WorkflowRun:
@@ -168,6 +172,8 @@ class WorkflowExecutor:
                 workflow_id=definition.id,
                 workflow_version=workflow_version,
                 trigger=trigger or {},
+                test=test,
+                workflow_snapshot=definition,
                 nodes={node.id: NodeRun(node_id=node.id) for node in definition.nodes},
             )
             self.repository.save(run)

@@ -7,7 +7,13 @@ import {
   readableRunError,
   RunResult,
 } from "../features/automations/run-result";
-import { Workflow, WorkflowRun as Run } from "../features/automations/types";
+import { PublishedAutomations } from "../features/automations/published-automations";
+import {
+  PublishedWorkflow,
+  Workflow,
+  WorkflowRun as Run,
+  WorkflowVersion,
+} from "../features/automations/types";
 import { ApiError, requestJson } from "../lib/api";
 
 export function AutomationsWorkspace() {
@@ -15,11 +21,14 @@ export function AutomationsWorkspace() {
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [versions, setVersions] = useState<number[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
+  const [publishedWorkflows, setPublishedWorkflows] = useState<PublishedWorkflow[]>([]);
   const [message, setMessage] = useState("Describe a goal to draft a workflow.");
   const [messageKind, setMessageKind] = useState<"status" | "error">("status");
   const [busy, setBusy] = useState<"draft" | "save" | "publish" | "test" | null>(null);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const [publishedFingerprint, setPublishedFingerprint] = useState<string | null>(null);
+  const [publishingRunId, setPublishingRunId] = useState<string | null>(null);
+  const [busyWorkflowId, setBusyWorkflowId] = useState<string | null>(null);
 
   useEffect(() => {
     requestJson<Run[]>("/workflow-runs", {}, "Run history could not be loaded.")
@@ -28,7 +37,34 @@ export function AutomationsWorkspace() {
         setMessageKind("error");
         setMessage("Run history is unavailable. Check that the Highland API is running.");
       });
+    requestJson<PublishedWorkflow[]>(
+      "/published-workflows",
+      {},
+      "Published automations could not be loaded.",
+    )
+      .then(setPublishedWorkflows)
+      .catch(() => {
+        setMessageKind("error");
+        setMessage("Published automations are unavailable. Check that the Highland API is running.");
+      });
   }, []);
+
+  function rememberPublication(version: WorkflowVersion) {
+    setPublishedWorkflows((current) => {
+      const existing = current.find((item) => item.workflow_id === version.workflow_id);
+      const summary: PublishedWorkflow = {
+        workflow_id: version.workflow_id,
+        name: version.definition.name,
+        description: version.definition.description,
+        latest_version: version.version,
+        version_count: Math.max(existing?.version_count ?? 0, version.version),
+        published_at: version.published_at,
+        step_count: version.definition.nodes.length,
+        active_schedule_count: existing?.active_schedule_count ?? 0,
+      };
+      return [summary, ...current.filter((item) => item.workflow_id !== summary.workflow_id)];
+    });
+  }
 
   async function draft() {
     setBusy("draft");
@@ -81,19 +117,20 @@ export function AutomationsWorkspace() {
     setMessageKind("status");
     setMessage("Saving and publishing the current reviewed draft…");
     try {
-      const payload = await requestJson<{ version?: number }>(
+      const payload = await requestJson<WorkflowVersion>(
         `/workflows/${workflow.id}/publish`,
         {
-        method: "POST",
-        body: JSON.stringify({ workflow }),
+          method: "POST",
+          body: JSON.stringify({ workflow }),
         },
         "The workflow could not be published.",
       );
-      if (typeof payload.version !== "number") {
+      if (typeof payload.version !== "number" || !payload.definition) {
         throw new Error("The workflow was published, but the API did not return its version.");
       }
       setVersions(Array.from({ length: payload.version }, (_, index) => index + 1));
       setPublishedFingerprint(workflowFingerprint(workflow));
+      rememberPublication(payload);
       setMessageKind("status");
       setMessage(
         `Version ${payload.version} is published and locked. Scheduling has not been activated.`
@@ -117,11 +154,16 @@ export function AutomationsWorkspace() {
     setMessageKind("status");
     setMessage("Saving the draft and running a safe test…");
     try {
-      const run = await requestJson<Run>(`/workflows/${workflow.id}/runs`, {
+      const created = await requestJson<Run>(`/workflows/${workflow.id}/runs`, {
         method: "POST",
         body: JSON.stringify({ test: true, workflow }),
       }, "The test run could not be started.");
-      setRuns((current) => [run, ...current]);
+      const run = await requestJson<Run>(
+        `/workflow-runs/${created.id}`,
+        {},
+        "The test completed, but its persisted result could not be loaded.",
+      );
+      setRuns((current) => [run, ...current.filter((item) => item.id !== run.id)]);
       setExpandedRunId(run.id);
       if (run.status === "failed") {
         setMessageKind("error");
@@ -144,6 +186,99 @@ export function AutomationsWorkspace() {
       );
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function publishTestRun(run: Run) {
+    setPublishingRunId(run.id);
+    setMessageKind("status");
+    setMessage("Publishing the exact workflow that produced this test result…");
+    try {
+      const published = await requestJson<WorkflowVersion>(
+        `/workflow-runs/${run.id}/publish`,
+        { method: "POST" },
+        "This test run could not be published.",
+      );
+      rememberPublication(published);
+      setRuns((current) => current.map((item) => (
+        item.id === run.id ? { ...item, published_version: published.version } : item
+      )));
+      if (workflow?.id === published.workflow_id) {
+        setVersions(Array.from({ length: published.version }, (_, index) => index + 1));
+        setPublishedFingerprint(workflowFingerprint(published.definition));
+      }
+      setMessageKind("status");
+      setMessage(
+        `Test approved and published as version ${published.version}. Scheduling has not been activated.`
+      );
+    } catch (caught) {
+      setMessageKind("error");
+      setMessage(caught instanceof Error ? caught.message : "Publish from test failed.");
+    } finally {
+      setPublishingRunId(null);
+    }
+  }
+
+  async function editPublished(selected: PublishedWorkflow) {
+    setBusyWorkflowId(selected.workflow_id);
+    setMessageKind("status");
+    setMessage(`Opening ${selected.name} as an editable draft…`);
+    try {
+      const payload = await requestJson<{
+        draft: Workflow;
+        versions: WorkflowVersion[];
+      }>(
+        `/workflows/${selected.workflow_id}`,
+        {},
+        "The published automation could not be opened.",
+      );
+      const latest = payload.versions.at(-1);
+      setWorkflow(payload.draft);
+      setVersions(payload.versions.map((version) => version.version));
+      setPublishedFingerprint(
+        latest ? workflowFingerprint(latest.definition) : null
+      );
+      setMessageKind("status");
+      setMessage(
+        `Editing ${selected.name}. Publish changes when the updated draft is ready.`
+      );
+    } catch (caught) {
+      setMessageKind("error");
+      setMessage(caught instanceof Error ? caught.message : "The automation could not be opened.");
+    } finally {
+      setBusyWorkflowId(null);
+    }
+  }
+
+  async function deletePublished(selected: PublishedWorkflow) {
+    const confirmed = window.confirm(
+      `Delete ${selected.name}? Its draft, published versions, and schedules will be removed. Run history will be kept.`
+    );
+    if (!confirmed) return;
+    setBusyWorkflowId(selected.workflow_id);
+    setMessageKind("status");
+    setMessage(`Deleting ${selected.name}…`);
+    try {
+      await requestJson<void>(
+        `/workflows/${selected.workflow_id}`,
+        { method: "DELETE" },
+        "The published automation could not be deleted.",
+      );
+      setPublishedWorkflows((current) => (
+        current.filter((item) => item.workflow_id !== selected.workflow_id)
+      ));
+      if (workflow?.id === selected.workflow_id) {
+        setWorkflow(null);
+        setVersions([]);
+        setPublishedFingerprint(null);
+      }
+      setMessageKind("status");
+      setMessage(`${selected.name} was deleted. Its run history is still available.`);
+    } catch (caught) {
+      setMessageKind("error");
+      setMessage(caught instanceof Error ? caught.message : "Delete failed.");
+    } finally {
+      setBusyWorkflowId(null);
     }
   }
 
@@ -173,6 +308,26 @@ export function AutomationsWorkspace() {
                 </div>
                 <span>Model · configured planner</span>
               </header>
+              <label>
+                Automation name
+                <input
+                  aria-label="Automation name"
+                  value={workflow.name}
+                  onChange={(event) => setWorkflow({ ...workflow, name: event.target.value })}
+                />
+              </label>
+              <label>
+                Description
+                <textarea
+                  className="workflow-description"
+                  aria-label="Automation description"
+                  value={workflow.description}
+                  onChange={(event) => setWorkflow({
+                    ...workflow,
+                    description: event.target.value,
+                  })}
+                />
+              </label>
               <label>
                 Estimated budget
                 <input aria-label="Estimated budget" defaultValue="10 model · 25 tool calls" />
@@ -254,7 +409,15 @@ export function AutomationsWorkspace() {
                     {expanded ? "Hide result" : "View result"}
                   </button>
                 </header>
-                {expanded && <RunResult run={run} />}
+                {expanded && (
+                  <RunResult
+                    run={run}
+                    publishing={publishingRunId === run.id}
+                    onPublish={run.test && run.workflow_snapshot
+                      ? () => void publishTestRun(run)
+                      : undefined}
+                  />
+                )}
                 {approvalId(approval?.output) && (
                   <div className="approval-card">
                     <strong>Approval required</strong>
@@ -266,12 +429,24 @@ export function AutomationsWorkspace() {
           })}
         </aside>
       </div>
+      <PublishedAutomations
+        workflows={publishedWorkflows}
+        busyWorkflowId={busyWorkflowId}
+        onEdit={(selected) => void editPublished(selected)}
+        onDelete={(selected) => void deletePublished(selected)}
+      />
     </section>
   );
 }
 
 function workflowFingerprint(workflow: Workflow): string {
-  return JSON.stringify(workflow);
+  const content = { ...workflow } as Workflow & {
+    created_at?: string;
+    updated_at?: string;
+  };
+  delete content.created_at;
+  delete content.updated_at;
+  return JSON.stringify(content);
 }
 
 function testRunRequestError(payload: unknown): string {

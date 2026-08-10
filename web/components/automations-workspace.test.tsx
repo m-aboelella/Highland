@@ -3,10 +3,14 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { AutomationsWorkspace } from "./automations-workspace";
 
-afterEach(cleanup);
+afterEach(() => {
+  vi.restoreAllMocks();
+  cleanup();
+});
 
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => [] })
     .mockResolvedValueOnce({ ok: true, json: async () => [] })
     .mockResolvedValueOnce({
       ok: true,
@@ -43,7 +47,21 @@ test("draft plan is explicitly reviewable before test or publication", async () 
 test("publish saves the visible draft and shows a durable publication state", async () => {
   vi.mocked(fetch).mockResolvedValueOnce({
     ok: true,
-    json: async () => ({ version: 3 }),
+    json: async () => ({
+      workflow_id: "wf_health",
+      version: 3,
+      published_at: "2026-08-10T08:00:00Z",
+      definition: {
+        id: "wf_health",
+        name: "Weekly health",
+        description: "",
+        nodes: [
+          { id: "start", kind: "trigger", name: "Start" },
+          { id: "health", kind: "generate", name: "Create the customer health update" },
+        ],
+        edges: [{ source: "start", target: "health" }],
+      },
+    }),
   } as Response);
 
   render(<AutomationsWorkspace />);
@@ -62,7 +80,7 @@ test("publish saves the visible draft and shows a durable publication state", as
   expect(screen.getByLabelText("Publication status")).toHaveTextContent("Version 3 is ready");
   const publishedButton = screen.getByRole("button", { name: "Published v3" });
   expect(publishedButton).toBeDisabled();
-  const request = vi.mocked(fetch).mock.calls[2];
+  const request = vi.mocked(fetch).mock.calls[3];
   expect(request[0]).toBe("http://127.0.0.1:8080/workflows/wf_health/publish");
   expect(JSON.parse(String(request[1]?.body))).toMatchObject({
     workflow: {
@@ -79,6 +97,7 @@ test("publish saves the visible draft and shows a durable publication state", as
 
 test("planning failures are shown as readable alerts", async () => {
   vi.stubGlobal("fetch", vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => [] })
     .mockResolvedValueOnce({ ok: true, json: async () => [] })
     .mockResolvedValueOnce({
       ok: false,
@@ -112,6 +131,54 @@ test("test run saves and executes the current in-browser draft in one request", 
       status: "completed",
       nodes: {},
     }),
+  } as Response).mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({
+      id: "wrun_health",
+      workflow_id: "wf_health",
+      workflow_version: 0,
+      status: "completed",
+      test: true,
+      workflow_snapshot: {
+        id: "wf_health",
+        name: "Weekly health",
+        description: "",
+        nodes: [
+          { id: "start", kind: "trigger", name: "Start" },
+          { id: "health", kind: "generate", name: "Classify health" },
+        ],
+        edges: [{ source: "start", target: "health" }],
+      },
+      model_calls: 1,
+      tool_calls: 1,
+      started_at: "2026-08-10T08:00:00Z",
+      updated_at: "2026-08-10T08:00:01Z",
+      nodes: {
+        start: { node_id: "start", status: "completed", output: {} },
+        health: {
+          node_id: "health",
+          status: "completed",
+          output: "## Customer health update\n\nNorthwind is stable and ready for review.",
+        },
+      },
+    }),
+  } as Response).mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({
+      workflow_id: "wf_health",
+      version: 1,
+      published_at: "2026-08-10T08:01:00Z",
+      definition: {
+        id: "wf_health",
+        name: "Weekly health",
+        description: "",
+        nodes: [
+          { id: "start", kind: "trigger", name: "Start" },
+          { id: "health", kind: "generate", name: "Classify health" },
+        ],
+        edges: [{ source: "start", target: "health" }],
+      },
+    }),
   } as Response);
 
   render(<AutomationsWorkspace />);
@@ -123,12 +190,26 @@ test("test run saves and executes the current in-browser draft in one request", 
   fireEvent.click(screen.getByRole("button", { name: "Test run" }));
 
   await screen.findByText(/Test run completed/);
-  const request = vi.mocked(fetch).mock.calls[2];
+  expect(screen.getByRole("heading", { name: "Customer health update" })).toBeInTheDocument();
+  expect(screen.getByText("Northwind is stable and ready for review.")).toBeInTheDocument();
+  const request = vi.mocked(fetch).mock.calls[3];
   expect(request[0]).toBe("http://127.0.0.1:8080/workflows/wf_health/runs");
   expect(JSON.parse(String(request[1]?.body))).toMatchObject({
     test: true,
     workflow: { id: "wf_health", name: "Weekly health" },
   });
+  expect(vi.mocked(fetch).mock.calls[4][0]).toBe(
+    "http://127.0.0.1:8080/workflow-runs/wrun_health"
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Publish this test" }));
+  const publishedButtons = await screen.findAllByRole("button", { name: "Published v1" });
+  expect(publishedButtons).toHaveLength(2);
+  publishedButtons.forEach((button) => expect(button).toBeDisabled());
+  expect(screen.getByLabelText("Published automations")).toHaveTextContent("Weekly health");
+  expect(vi.mocked(fetch).mock.calls[5][0]).toBe(
+    "http://127.0.0.1:8080/workflow-runs/wrun_health/publish"
+  );
 });
 
 test("run history presents the customer outcome before technical JSON", async () => {
@@ -168,7 +249,7 @@ test("run history presents the customer outcome before technical JSON", async ()
         },
       },
     }]),
-  }));
+  }).mockResolvedValueOnce({ ok: true, json: async () => [] }));
 
   render(<AutomationsWorkspace />);
   fireEvent.click(await screen.findByRole("button", { name: "View result" }));
@@ -190,17 +271,114 @@ test("run history presents the customer outcome before technical JSON", async ()
   );
 });
 
-test("failed test runs stay visible and explain the failure", async () => {
-  vi.mocked(fetch).mockResolvedValueOnce({
+test("JSON-encoded model output is rendered as a readable result", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce({
     ok: true,
-    json: async () => ({
-      id: "wrun_health",
+    json: async () => ([{
+      id: "wrun_json",
       workflow_id: "wf_health",
       workflow_version: 0,
-      status: "failed",
-      error: "ToolRejected: Invalid arguments for observability__get_deployment",
-      nodes: {},
-    }),
+      status: "completed",
+      model_calls: 1,
+      tool_calls: 2,
+      started_at: "2026-08-10T08:00:00Z",
+      updated_at: "2026-08-10T08:00:01Z",
+      nodes: {
+        generate_review: {
+          node_id: "generate_review",
+          status: "completed",
+          output: JSON.stringify({
+            summary: "Northwind is stable",
+            next_action: "Keep monitoring",
+          }),
+        },
+      },
+    }]),
+  }).mockResolvedValueOnce({ ok: true, json: async () => [] }));
+
+  render(<AutomationsWorkspace />);
+  fireEvent.click(await screen.findByRole("button", { name: "View result" }));
+
+  expect(screen.getByText("Summary")).toBeInTheDocument();
+  expect(screen.getByText("Northwind is stable")).toBeInTheDocument();
+  expect(screen.getByText("Next action")).toBeInTheDocument();
+  expect(screen.getByText("Keep monitoring")).toBeInTheDocument();
+  expect(screen.queryByText(/\{"summary"/)).not.toBeInTheDocument();
+});
+
+test("published automations can be opened for editing and deleted", async () => {
+  const definition = {
+    id: "wf_daily_health",
+    name: "Daily health review",
+    description: "Review Northwind every morning.",
+    nodes: [
+      { id: "start", kind: "trigger", name: "Start" },
+      { id: "health", kind: "generate", name: "Summarize health" },
+    ],
+    edges: [{ source: "start", target: "health" }],
+  };
+  vi.stubGlobal("fetch", vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => [] })
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ([{
+        workflow_id: definition.id,
+        name: definition.name,
+        description: definition.description,
+        latest_version: 2,
+        version_count: 2,
+        published_at: "2026-08-10T08:00:00Z",
+        step_count: 2,
+        active_schedule_count: 0,
+      }]),
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        draft: definition,
+        versions: [
+          { workflow_id: definition.id, version: 1, published_at: "2026-08-09T08:00:00Z", definition },
+          { workflow_id: definition.id, version: 2, published_at: "2026-08-10T08:00:00Z", definition },
+        ],
+      }),
+    })
+    .mockResolvedValueOnce({ ok: true, status: 204 }));
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+
+  render(<AutomationsWorkspace />);
+  expect(await screen.findByText("Review Northwind every morning.")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Edit draft" }));
+  expect(await screen.findByDisplayValue("Daily health review")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Published v2" })).toBeDisabled();
+
+  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+  expect(await screen.findByText("Daily health review was deleted. Its run history is still available."))
+    .toBeInTheDocument();
+  expect(screen.getByLabelText("Published automations")).not.toHaveTextContent(
+    "Review Northwind every morning."
+  );
+  expect(vi.mocked(fetch).mock.calls[3][0]).toBe(
+    "http://127.0.0.1:8080/workflows/wf_daily_health"
+  );
+  expect(vi.mocked(fetch).mock.calls[3][1]).toMatchObject({ method: "DELETE" });
+});
+
+test("failed test runs stay visible and explain the failure", async () => {
+  const failedRun = {
+    id: "wrun_health",
+    workflow_id: "wf_health",
+    workflow_version: 0,
+    status: "failed",
+    error: "ToolRejected: Invalid arguments for observability__get_deployment",
+    nodes: {},
+  };
+  vi.mocked(fetch).mockResolvedValueOnce({
+    ok: true,
+    json: async () => failedRun,
+  } as Response).mockResolvedValueOnce({
+    ok: true,
+    json: async () => failedRun,
   } as Response);
 
   render(<AutomationsWorkspace />);

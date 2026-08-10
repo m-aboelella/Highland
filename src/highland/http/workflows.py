@@ -2,7 +2,7 @@
 
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 
 from highland.models.contracts import ModelError
 from highland.runtime.mcp import MCPGateway
@@ -60,6 +60,34 @@ def create_workflow_router(services: ApplicationServices) -> APIRouter:
     async def list_workflows() -> list[dict[str, object]]:
         return [workflow.model_dump(mode="json") for workflow in workflows.list()]
 
+    @router.get("/published-workflows")
+    async def list_published_workflows() -> list[dict[str, object]]:
+        schedules = services.workflow_schedules.list()
+        published: list[dict[str, object]] = []
+        for draft in workflows.list():
+            versions = workflows.list_versions(draft.id)
+            if not versions:
+                continue
+            latest = versions[-1]
+            active_schedules = [
+                schedule
+                for schedule in schedules
+                if schedule.workflow_id == draft.id and schedule.enabled
+            ]
+            published.append(
+                {
+                    "workflow_id": draft.id,
+                    "name": latest.definition.name,
+                    "description": latest.definition.description,
+                    "latest_version": latest.version,
+                    "version_count": len(versions),
+                    "published_at": latest.published_at,
+                    "step_count": len(latest.definition.nodes),
+                    "active_schedule_count": len(active_schedules),
+                }
+            )
+        return sorted(published, key=lambda item: str(item["published_at"]), reverse=True)
+
     @router.get("/workflows/{workflow_id}")
     async def get_workflow(workflow_id: str) -> dict[str, object]:
         try:
@@ -72,6 +100,16 @@ def create_workflow_router(services: ApplicationServices) -> APIRouter:
                 version.model_dump(mode="json") for version in workflows.list_versions(workflow_id)
             ],
         }
+
+    @router.delete("/workflows/{workflow_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def delete_workflow(workflow_id: str) -> Response:
+        try:
+            workflows.get_draft(workflow_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Workflow not found") from None
+        services.workflow_schedules.delete_for_workflow(workflow_id)
+        workflows.delete(workflow_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @router.post("/workflows/{workflow_id}/publish")
     async def publish_workflow(
@@ -105,6 +143,41 @@ def create_workflow_router(services: ApplicationServices) -> APIRouter:
     @router.get("/workflow-runs")
     async def list_workflow_runs() -> list[dict[str, object]]:
         return [run.model_dump(mode="json") for run in services.workflow_runs.list()]
+
+    @router.get("/workflow-runs/{run_id}")
+    async def get_workflow_run(run_id: str) -> dict[str, object]:
+        try:
+            run = services.workflow_runs.get(run_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Workflow run not found") from None
+        return run.model_dump(mode="json")
+
+    @router.post("/workflow-runs/{run_id}/publish")
+    async def publish_test_run(run_id: str) -> dict[str, object]:
+        try:
+            run = services.workflow_runs.get(run_id)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Workflow run not found") from None
+        if not run.test:
+            raise HTTPException(status_code=422, detail="Only test runs can be published")
+        if run.status.value != "completed":
+            raise HTTPException(
+                status_code=409,
+                detail="Only a completed test run can be published",
+            )
+        if run.workflow_snapshot is None:
+            raise HTTPException(
+                status_code=422,
+                detail="This older test run does not contain a publishable workflow snapshot",
+            )
+        workflows.save_draft(run.workflow_snapshot)
+        published = workflows.publish(run.workflow_id)
+        run.published_version = published.version
+        services.workflow_runs.save(run)
+        return {
+            **published.model_dump(mode="json"),
+            "source_run_id": run.id,
+        }
 
     @router.post("/workflows/{workflow_id}/schedules", status_code=status.HTTP_201_CREATED)
     async def schedule_workflow(

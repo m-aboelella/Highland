@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 from pathlib import Path
 
 from .schema import WorkflowDefinition, WorkflowVersion, utc_now
@@ -79,6 +80,12 @@ class WorkflowRepository:
             except (OSError, ValueError):
                 continue
         return sorted(drafts, key=lambda workflow: workflow.updated_at, reverse=True)
+
+    def delete(self, workflow_id: str) -> None:
+        directory = self._directory(workflow_id)
+        if not directory.exists():
+            raise FileNotFoundError(workflow_id)
+        shutil.rmtree(directory)
 
     def _directory(self, workflow_id: str) -> Path:
         if not self._valid_id.fullmatch(workflow_id):

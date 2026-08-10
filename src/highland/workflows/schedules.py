@@ -70,6 +70,14 @@ class WorkflowScheduleRepository:
             for path in sorted(self.directory.glob("sch_*.json"))
         ]
 
+    def delete_for_workflow(self, workflow_id: str) -> int:
+        deleted = 0
+        for schedule in self.list():
+            if schedule.workflow_id == workflow_id:
+                (self.directory / f"{schedule.id}.json").unlink(missing_ok=True)
+                deleted += 1
+        return deleted
+
     def claim_due(
         self, schedule_id: str, *, now: datetime | None = None
     ) -> tuple[WorkflowSchedule, datetime] | None:
