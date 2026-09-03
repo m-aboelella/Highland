@@ -1,0 +1,800 @@
+ChatRequest(
+    messages=[
+        Message(
+            role=<MessageRole.SYSTEM: 'system'>,
+            content="You are Highland's enterprise workspace agent. Use tools to verify mutable facts, distinguish observations from hypotheses, preserve source identifiers, and never claim that a write occurred until its tool result confirms it.",
+            tool_calls=[],
+            tool_results=[]
+        ),
+        Message(
+            role=<MessageRole.USER: 'user'>,
+            content='Prepare a briefing for a meeting with Northwind',
+            tool_calls=[],
+            tool_results=[]
+        )
+    ],
+    tools=[
+        ToolDefinition(
+            name='communications__list_customer_meetings',
+            description='[communications] List past or upcoming customer meetings and notes.',
+            input_schema={
+                'properties':{
+                    'customer_id':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Customer Id'
+                    },
+                    'starts_after':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Starts After'
+                    },
+                    'starts_before':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Starts Before'
+                    }
+                },
+                'title': 'list_customer_meetingsArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='communications__list_messages',
+            description='[communications] Enumerate messages eligible for the local search index.',
+            input_schema={
+                'properties':{
+                    'customer_id':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Customer Id'
+                    }
+                },
+                'title': 'list_messagesArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='communications__post_customer_update',
+            description='[communications] Post an external customer update. Highland policy requires human approval.',
+            input_schema={
+                'properties':{
+                    'customer_id':{
+                        'title': 'Customer Id',
+                        'type': 'string'
+                    },
+                    'message':{
+                        'title': 'Message',
+                        'type': 'string'
+                    },
+                    'idempotency_key':{
+                        'title': 'Idempotency Key',
+                        'type': 'string'
+                    },
+                    'channel':{
+                        'default': 'customer-operations',
+                        'title': 'Channel',
+                        'type': 'string'
+                    }
+                },
+                'required':[
+                    'customer_id',
+                    'message',
+                    'idempotency_key'
+                ],
+                'title': 'post_customer_updateArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='communications__search_messages',
+            description='[communications] Search internal messages, preserving channel and visibility metadata.',
+            input_schema={
+                'properties':{
+                    'query':{
+                        'title': 'Query',
+                        'type': 'string'
+                    },
+                    'customer_id':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Customer Id'
+                    },
+                    'since':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Since'
+                    },
+                    'limit':{
+                        'default': 10,
+                        'title': 'Limit',
+                        'type': 'integer'
+                    }
+                },
+                'required':[
+                    'query'
+                ],
+                'title': 'search_messagesArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='crm__get_customer',
+            description='[crm] Get one CRM customer by stable ID, such as cus_northwind.',
+            input_schema={
+                'properties':{
+                    'customer_id':{
+                        'title': 'Customer Id',
+                        'type': 'string'
+                    }
+                },
+                'required':[
+                    'customer_id'
+                ],
+                'title': 'get_customerArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='crm__list_customers',
+            description='[crm] List CRM customer accounts, optionally filtering status, health, or region.',
+            input_schema={
+                'properties':{
+                    'status':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Status'
+                    },
+                    'health':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Health'
+                    },
+                    'region':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Region'
+                    }
+                },
+                'title': 'list_customersArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='knowledge__get_document',
+            description='[knowledge] Get a complete document and all of its citable passages.',
+            input_schema={
+                'properties':{
+                    'document_id':{
+                        'title': 'Document Id',
+                        'type': 'string'
+                    }
+                },
+                'required':[
+                    'document_id'
+                ],
+                'title': 'get_documentArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='knowledge__list_documents',
+            description='[knowledge] Enumerate canonical documents available for indexing.',
+            input_schema={
+                'properties':{
+                    'customer_id':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Customer Id'
+                    },
+                    'document_type':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Document Type'
+                    },
+                    'team':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Team'
+                    }
+                },
+                'title': 'list_documentsArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='knowledge__search_documents',
+            description='[knowledge] Search exact passages in product docs, runbooks, policies, and customer plans.',
+            input_schema={
+                'properties':{
+                    'query':{
+                        'title': 'Query',
+                        'type': 'string'
+                    },
+                    'customer_id':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Customer Id'
+                    },
+                    'document_type':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Document Type'
+                    },
+                    'team':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Team'
+                    },
+                    'limit':{
+                        'default': 10,
+                        'title': 'Limit',
+                        'type': 'integer'
+                    }
+                },
+                'required':[
+                    'query'
+                ],
+                'title': 'search_documentsArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='observability__get_deployment',
+            description='[observability] Get deployment topology, version, and health for a customer.',
+            input_schema={
+                'properties':{
+                    'customer_id':{
+                        'title': 'Customer Id',
+                        'type': 'string'
+                    }
+                },
+                'required':[
+                    'customer_id'
+                ],
+                'title': 'get_deploymentArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='observability__list_available_metrics',
+            description='[observability] List metric names available for a customer before querying values.',
+            input_schema={
+                'properties':{
+                    'customer_id':{
+                        'title': 'Customer Id',
+                        'type': 'string'
+                    }
+                },
+                'required':[
+                    'customer_id'
+                ],
+                'title': 'list_available_metricsArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='observability__list_incidents',
+            description='[observability] List operational incidents for a customer.',
+            input_schema={
+                'properties':{
+                    'customer_id':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Customer Id'
+                    },
+                    'status':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Status'
+                    }
+                },
+                'title': 'list_incidentsArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='observability__query_deployment_metrics',
+            description='[observability] Query one exact available metric over 1h, 6h, 12h, 24h, 48h, or 7d.',
+            input_schema={
+                'properties':{
+                    'customer_id':{
+                        'title': 'Customer Id',
+                        'type': 'string'
+                    },
+                    'metric':{
+                        'enum':[
+                            'retrieval.p95_ms',
+                            'retrieval.p50_ms',
+                            'retrieval.error_rate',
+                            'retrieval.shard_3.memory_utilization',
+                            'retrieval.queries_per_second'
+                        ],
+                        'title': 'Metric',
+                        'type': 'string'
+                    },
+                    'time_range':{
+                        'default': '24h',
+                        'title': 'Time Range',
+                        'type': 'string'
+                    }
+                },
+                'required':[
+                    'customer_id',
+                    'metric'
+                ],
+                'title': 'query_deployment_metricsArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='projects__create_project_issue',
+            description='[projects] Create a project issue. Highland policy requires human approval before use.',
+            input_schema={
+                'properties':{
+                    'project_id':{
+                        'title': 'Project Id',
+                        'type': 'string'
+                    },
+                    'title':{
+                        'title': 'Title',
+                        'type': 'string'
+                    },
+                    'description':{
+                        'title': 'Description',
+                        'type': 'string'
+                    },
+                    'idempotency_key':{
+                        'title': 'Idempotency Key',
+                        'type': 'string'
+                    },
+                    'customer_id':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Customer Id'
+                    },
+                    'priority':{
+                        'default': 'medium',
+                        'title': 'Priority',
+                        'type': 'string'
+                    },
+                    'labels':{
+                        'anyOf':[
+{
+                                'items':{
+                                    'type': 'string'
+                                },
+                                'type': 'array'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Labels'
+                    }
+                },
+                'required':[
+                    'project_id',
+                    'title',
+                    'description',
+                    'idempotency_key'
+                ],
+                'title': 'create_project_issueArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='projects__get_project_issue',
+            description='[projects] Get one project issue by stable ID or human key.',
+            input_schema={
+                'properties':{
+                    'issue_id':{
+                        'title': 'Issue Id',
+                        'type': 'string'
+                    }
+                },
+                'required':[
+                    'issue_id'
+                ],
+                'title': 'get_project_issueArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='projects__list_project_issues',
+            description='[projects] List project issues by customer, project, or status.',
+            input_schema={
+                'properties':{
+                    'customer_id':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Customer Id'
+                    },
+                    'project_id':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Project Id'
+                    },
+                    'status':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Status'
+                    }
+                },
+                'title': 'list_project_issuesArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='support__create_ticket',
+            description='[support] Create a support ticket. Highland policy requires human approval before use.',
+            input_schema={
+                'properties':{
+                    'customer_id':{
+                        'title': 'Customer Id',
+                        'type': 'string'
+                    },
+                    'title':{
+                        'title': 'Title',
+                        'type': 'string'
+                    },
+                    'description':{
+                        'title': 'Description',
+                        'type': 'string'
+                    },
+                    'idempotency_key':{
+                        'title': 'Idempotency Key',
+                        'type': 'string'
+                    },
+                    'priority':{
+                        'default': 'P3',
+                        'title': 'Priority',
+                        'type': 'string'
+                    },
+                    'category':{
+                        'default': 'investigation',
+                        'title': 'Category',
+                        'type': 'string'
+                    }
+                },
+                'required':[
+                    'customer_id',
+                    'title',
+                    'description',
+                    'idempotency_key'
+                ],
+                'title': 'create_ticketArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='support__get_ticket',
+            description='[support] Get a support ticket by ID or key, including comments.',
+            input_schema={
+                'properties':{
+                    'ticket_id':{
+                        'title': 'Ticket Id',
+                        'type': 'string'
+                    }
+                },
+                'required':[
+                    'ticket_id'
+                ],
+                'title': 'get_ticketArguments',
+                'type': 'object'
+            }
+        ),
+        ToolDefinition(
+            name='support__list_customer_tickets',
+            description='[support] List support tickets for one customer.',
+            input_schema={
+                'properties':{
+                    'customer_id':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Customer Id'
+                    },
+                    'status':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Status'
+                    },
+                    'priority':{
+                        'anyOf':[
+{
+                                'type': 'string'
+                            },
+{
+                                'type': 'null'
+                            }
+                        ],
+                        'default': None,
+                        'title': 'Priority'
+                    }
+                },
+                'title': 'list_customer_ticketsArguments',
+                'type': 'object'
+            }
+        )
+    ],
+    documents=[
+        Document(
+            id='chk_d8566b99ad81ca969bc4d8d9',
+            text='Summit will deliver a capacity review before August 7. Northwind will confirm its Q4 ingestion forecast. Both teams will agree on a latency service-level objective before renewal planning.',
+            metadata={
+                'source_system': 'archive',
+                'source_id': 'doc_northwind_success_plan',
+                'source_url': 'https://archive.summit.test/docs/doc_northwind_success_plan#passage=pas_northwind_actions',
+                'source_type': 'customer-plan',
+                'customer_id': 'cus_northwind',
+                'section': 'Open success actions',
+                'updated_at': '2026-07-01T11:00:00+00:00'
+            }
+        ),
+        Document(
+            id='chk_7f457f11b825d2372e7579de',
+            text='Northwind approved the 4.18.2 maintenance window. Tomas asked Summit to quantify headroom before Q4. Elena reiterated that stable response time is a renewal requirement.',
+            metadata={
+                'source_system': 'pulse',
+                'source_id': 'mtg_northwind_0723',
+                'source_url': 'https://pulse.summit.test/meetings/mtg_northwind_0723',
+                'source_type': 'meeting_notes',
+                'customer_id': 'cus_northwind',
+                'section': 'Content',
+                'updated_at': '2026-07-23T10:30:00+00:00'
+            }
+        ),
+        Document(
+            id='chk_592332c3b9821444be3acca5',
+            text='Northwind’s 2026 target is to reduce analyst time spent locating approved policy material by 30%. The executive sponsor will assess adoption, answer quality, and stable performance at the October renewal review.',
+            metadata={
+                'source_system': 'archive',
+                'source_id': 'doc_northwind_success_plan',
+                'source_url': 'https://archive.summit.test/docs/doc_northwind_success_plan#passage=pas_northwind_outcomes',
+                'source_type': 'customer-plan',
+                'customer_id': 'cus_northwind',
+                'section': 'Business outcomes',
+                'updated_at': '2026-07-01T11:00:00+00:00'
+            }
+        ),
+        Document(
+            id='chk_2c61458fdb0229644f0358f6',
+            text="This resembles the 4.18.2 first-compaction limitation, but we should call it a hypothesis until tonight's controlled run. Please avoid telling Northwind that the upgrade is definitively the root cause.",
+            metadata={
+                'source_system': 'pulse',
+                'source_id': 'msg_7002',
+                'source_url': 'https://pulse.summit.test/channels/support-northwind/msg_7002',
+                'source_type': 'message',
+                'customer_id': 'cus_northwind',
+                'section': 'Content',
+                'updated_at': '2026-07-28T14:22:00+00:00'
+            }
+        ),
+        Document(
+            id='chk_87df5e72a9be24466ffe20f2',
+            text='A production degradation affecting a primary customer workflow with no acceptable workaround is Priority 1. Provide an update at least every 60 minutes while actively mitigating.',
+            metadata={
+                'source_system': 'archive',
+                'source_id': 'doc_incident_policy',
+                'source_url': 'https://archive.summit.test/docs/doc_incident_policy#passage=pas_severity_p1',
+                'source_type': 'policy',
+                'customer_id': None,
+                'section': 'Priority 1',
+                'updated_at': '2026-04-05T10:00:00+00:00'
+            }
+        ),
+        Document(
+            id='chk_282893176e76979146b5aaa4',
+            text='Summarize current headroom, expected Q4 ingestion, and recommended shard plan. Share a customer-safe version before August 7.',
+            metadata={
+                'source_system': 'track',
+                'source_id': 'iss_91',
+                'source_url': 'https://track.summit.test/issues/CUST-91',
+                'source_type': 'issue',
+                'customer_id': 'cus_northwind',
+                'section': 'Content',
+                'updated_at': '2026-07-23T10:40:00+00:00'
+            }
+        ),
+        Document(
+            id='chk_c27f3973e48507db98802ed9',
+            text='Northwind reports analyst searches taking 1.5–2.2 seconds. Normal p95 is under 700 ms. The slowdown began after the weekend maintenance window.',
+            metadata={
+                'source_system': 'relay',
+                'source_id': 'tkt_1042',
+                'source_url': 'https://relay.summit.test/tickets/SUP-1042',
+                'source_type': 'ticket',
+                'customer_id': 'cus_northwind',
+                'section': 'Description',
+                'updated_at': '2026-07-29T11:42:00+00:00'
+            }
+        ),
+        Document(
+            id='chk_c2c8c2f9de2b2aa8617cc33a',
+            text='Tomorrow Elena will want to know whether analysts are still affected, what we know versus suspect, and whether the October renewal timeline is at risk. We also owe Tomas a date for the capacity review.',
+            metadata={
+                'source_system': 'pulse',
+                'source_id': 'msg_7003',
+                'source_url': 'https://pulse.summit.test/channels/customer-success/msg_7003',
+                'source_type': 'message',
+                'customer_id': 'cus_northwind',
+                'section': 'Content',
+                'updated_at': '2026-07-29T09:02:00+00:00'
+            }
+        )
+    ],
+    response_schema=None,
+    max_tokens=None,
+    temperature=None,
+    required_capabilities=ModelCapabilities(
+        tools=True,
+        citations=False,
+        structured_output=False,
+        reasoning=False,
+        vision=False,
+        streaming=False
+    ),
+    logical_call_id='run_a90a1092b1db44be977bdc9ff14ab058:model:1'
+)

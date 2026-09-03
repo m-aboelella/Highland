@@ -1,0 +1,35 @@
+ChatResponse(
+    message=Message(
+        role=<MessageRole.ASSISTANT: 'assistant'>,
+        content='',
+        tool_calls=[
+            ToolCall(
+                id='crm__get_customer_fhvzyts1zf7p',
+                name='crm__get_customer',
+                arguments={
+                    'customer_id': 'cus_northwind'
+                }
+            )
+        ],
+        tool_results=[]
+    ),
+    citations=[],
+    finish_reason=<FinishReason.TOOL_CALL: 'tool_call'>,
+    usage=Usage(
+        input_tokens=4062,
+        output_tokens=108,
+        billed_input_tokens=2632,
+        billed_output_tokens=83,
+        search_units=None
+    ),
+    metadata=ResponseMetadata(
+        provider='cohere',
+        model='command-a-plus-05-2026',
+        request_id='19fe6050-fa6c-4f31-b173-edd3b4924e77',
+        logical_call_id='run_a90a1092b1db44be977bdc9ff14ab058:model:1',
+        latency_ms=877.4599861353636,
+        simulated=False,
+        raw_response=None
+    ),
+    structured_output=None
+)

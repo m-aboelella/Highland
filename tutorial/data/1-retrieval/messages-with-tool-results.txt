@@ -1,0 +1,40 @@
+[
+    Message(
+        role=<MessageRole.SYSTEM: 'system'>,
+        content="You are Highland's enterprise workspace agent. Use tools to verify mutable facts, distinguish observations from hypotheses, preserve source identifiers, and never claim that a write occurred until its tool result confirms it.",
+        tool_calls=[],
+        tool_results=[]
+    ),
+    Message(
+        role=<MessageRole.USER: 'user'>,
+        content='Prepare a briefing for a meeting with Northwind',
+        tool_calls=[],
+        tool_results=[]
+    ),
+    Message(
+        role=<MessageRole.ASSISTANT: 'assistant'>,
+        content='',
+        tool_calls=[
+            ToolCall(
+                id='crm__get_customer_fhvzyts1zf7p',
+                name='crm__get_customer',
+                arguments={
+                    'customer_id': 'cus_northwind'
+                }
+            )
+        ],
+        tool_results=[]
+    ),
+    Message(
+        role=<MessageRole.TOOL: 'tool'>,
+        content='',
+        tool_calls=[],
+        tool_results=[
+            ToolResult(
+                tool_call_id='crm__get_customer_fhvzyts1zf7p',
+                content='{\n  "source_system": "atlas",\n  "record_id": "cus_northwind",\n  "id": "cus_northwind",\n  "name": "Northwind Bank",\n  "industry": "Financial services",\n  "tier": "Strategic",\n  "status": "active",\n  "region": "EU",\n  "account_owner": {\n    "id": "usr_maya",\n    "name": "Maya Chen"\n  },\n  "technical_owner": {\n    "id": "usr_jonah",\n    "name": "Jonah Okafor"\n  },\n  "renewal_date": "2026-10-31",\n  "annual_contract_value_usd": 780000,\n  "health": "watch",\n  "health_reason": "Open P1 retrieval-latency issue and renewal in 94 days",\n  "deployment_ids": [\n    "dep_northwind_prod"\n  ],\n  "contacts": [\n    {\n      "id": "con_elena",\n      "name": "Elena Varga",\n      "role": "VP, Digital Platforms",\n      "email": "elena.varga@northwind-bank.test",\n      "decision_role": "executive sponsor"\n    },\n    {\n      "id": "con_tomas",\n      "name": "Tomas Reed",\n      "role": "Search Platform Lead",\n      "email": "tomas.reed@northwind-bank.test",\n      "decision_role": "technical owner"\n    }\n  ],\n  "tags": [\n    "regulated",\n    "private-cloud",\n    "renewal-q4"\n  ],\n  "next_meeting_at": "2026-07-30T09:30:00Z",\n  "notes": "Northwind uses Summit Search for internal policy and analyst research. They value predictable latency and auditability over raw throughput.",\n  "visibility": "customer-success",\n  "updated_at": "2026-07-29T09:10:00Z",\n  "source_url": "https://atlas.summit.test/customers/cus_northwind"\n}',
+                is_error=False
+            )
+        ]
+    )
+]

@@ -1,0 +1,106 @@
+[
+    Document(
+        id='chk_d8566b99ad81ca969bc4d8d9',
+        text='Summit will deliver a capacity review before August 7. Northwind will confirm its Q4 ingestion forecast. Both teams will agree on a latency service-level objective before renewal planning.',
+        metadata={
+            'source_system': 'archive',
+            'source_id': 'doc_northwind_success_plan',
+            'source_url': 'https://archive.summit.test/docs/doc_northwind_success_plan#passage=pas_northwind_actions',
+            'source_type': 'customer-plan',
+            'customer_id': 'cus_northwind',
+            'section': 'Open success actions',
+            'updated_at': '2026-07-01T11:00:00+00:00'
+        }
+    ),
+    Document(
+        id='chk_7f457f11b825d2372e7579de',
+        text='Northwind approved the 4.18.2 maintenance window. Tomas asked Summit to quantify headroom before Q4. Elena reiterated that stable response time is a renewal requirement.',
+        metadata={
+            'source_system': 'pulse',
+            'source_id': 'mtg_northwind_0723',
+            'source_url': 'https://pulse.summit.test/meetings/mtg_northwind_0723',
+            'source_type': 'meeting_notes',
+            'customer_id': 'cus_northwind',
+            'section': 'Content',
+            'updated_at': '2026-07-23T10:30:00+00:00'
+        }
+    ),
+    Document(
+        id='chk_592332c3b9821444be3acca5',
+        text='Northwind’s 2026 target is to reduce analyst time spent locating approved policy material by 30%. The executive sponsor will assess adoption, answer quality, and stable performance at the October renewal review.',
+        metadata={
+            'source_system': 'archive',
+            'source_id': 'doc_northwind_success_plan',
+            'source_url': 'https://archive.summit.test/docs/doc_northwind_success_plan#passage=pas_northwind_outcomes',
+            'source_type': 'customer-plan',
+            'customer_id': 'cus_northwind',
+            'section': 'Business outcomes',
+            'updated_at': '2026-07-01T11:00:00+00:00'
+        }
+    ),
+    Document(
+        id='chk_2c61458fdb0229644f0358f6',
+        text="This resembles the 4.18.2 first-compaction limitation, but we should call it a hypothesis until tonight's controlled run. Please avoid telling Northwind that the upgrade is definitively the root cause.",
+        metadata={
+            'source_system': 'pulse',
+            'source_id': 'msg_7002',
+            'source_url': 'https://pulse.summit.test/channels/support-northwind/msg_7002',
+            'source_type': 'message',
+            'customer_id': 'cus_northwind',
+            'section': 'Content',
+            'updated_at': '2026-07-28T14:22:00+00:00'
+        }
+    ),
+    Document(
+        id='chk_87df5e72a9be24466ffe20f2',
+        text='A production degradation affecting a primary customer workflow with no acceptable workaround is Priority 1. Provide an update at least every 60 minutes while actively mitigating.',
+        metadata={
+            'source_system': 'archive',
+            'source_id': 'doc_incident_policy',
+            'source_url': 'https://archive.summit.test/docs/doc_incident_policy#passage=pas_severity_p1',
+            'source_type': 'policy',
+            'customer_id': None,
+            'section': 'Priority 1',
+            'updated_at': '2026-04-05T10:00:00+00:00'
+        }
+    ),
+    Document(
+        id='chk_282893176e76979146b5aaa4',
+        text='Summarize current headroom, expected Q4 ingestion, and recommended shard plan. Share a customer-safe version before August 7.',
+        metadata={
+            'source_system': 'track',
+            'source_id': 'iss_91',
+            'source_url': 'https://track.summit.test/issues/CUST-91',
+            'source_type': 'issue',
+            'customer_id': 'cus_northwind',
+            'section': 'Content',
+            'updated_at': '2026-07-23T10:40:00+00:00'
+        }
+    ),
+    Document(
+        id='chk_c27f3973e48507db98802ed9',
+        text='Northwind reports analyst searches taking 1.5–2.2 seconds. Normal p95 is under 700 ms. The slowdown began after the weekend maintenance window.',
+        metadata={
+            'source_system': 'relay',
+            'source_id': 'tkt_1042',
+            'source_url': 'https://relay.summit.test/tickets/SUP-1042',
+            'source_type': 'ticket',
+            'customer_id': 'cus_northwind',
+            'section': 'Description',
+            'updated_at': '2026-07-29T11:42:00+00:00'
+        }
+    ),
+    Document(
+        id='chk_c2c8c2f9de2b2aa8617cc33a',
+        text='Tomorrow Elena will want to know whether analysts are still affected, what we know versus suspect, and whether the October renewal timeline is at risk. We also owe Tomas a date for the capacity review.',
+        metadata={
+            'source_system': 'pulse',
+            'source_id': 'msg_7003',
+            'source_url': 'https://pulse.summit.test/channels/customer-success/msg_7003',
+            'source_type': 'message',
+            'customer_id': 'cus_northwind',
+            'section': 'Content',
+            'updated_at': '2026-07-29T09:02:00+00:00'
+        }
+    )
+]
