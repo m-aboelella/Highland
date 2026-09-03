@@ -25,6 +25,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "debugpy>=1.8,<2",
   "mypy>=1.17,<2",
   "pip-tools>=7.6,<8",
   "pytest>=8.3,<9",

@@ -96,6 +96,88 @@ highland-mocks dev
 use the separate production lock, so Cohere, MCP, and their transitive
 dependencies resolve consistently in local development, CI, and Docker.
 
+## Debug the application
+
+Highland includes a repeatable Python debugging environment. After installing
+Docker, run this single command from the repository root:
+
+```bash
+make debug
+```
+
+The command installs the local development environment when necessary, starts
+the web app and all synthetic enterprise services, synchronizes the search
+index, and runs the API through `debugpy`. It uses the application backend
+selected by `HIGHLAND_MODEL_BACKEND` in `.env`. A new setup defaults to
+`scripted`; a setup configured by `bootstrap.sh` uses `cohere` and can make
+billable embedding, rerank, and chat calls while debugging. The process pauses
+before importing Highland and prints this message when it is ready:
+
+```text
+Highland is waiting for a debugger at 127.0.0.1:5678.
+```
+
+### Attach VS Code
+
+1. Open the repository folder in VS Code. For a remote machine, open it with
+   VS Code Remote - SSH so the editor extensions and debugger run beside the
+   application.
+2. Accept the workspace recommendations for Microsoft's Python and Python
+   Debugger extensions. They are recorded in `.vscode/extensions.json`; if the
+   recommendation prompt is dismissed, install extensions `ms-python.python`
+   and `ms-python.debugpy` manually.
+3. Set breakpoints in the Python source.
+4. Open **Run and Debug**, select **Highland: Attach to make debug**, and press
+   `F5`. The checked-in `.vscode/launch.json` connects to the waiting process
+   and follows Python subprocesses, including the stdio MCP connectors.
+5. Open <http://localhost:3000> and start a Discover run. VS Code stops when
+   the request reaches a breakpoint.
+
+Useful places to begin are:
+
+- `src/highland/cli.py`, `main`: command-line entry point;
+- `src/highland/cli_commands.py`, `run_app`: Uvicorn startup;
+- `src/highland/api.py`, `create_app`: service composition;
+- `src/highland/http/discover.py`, `create_run`: HTTP and background-task boundary;
+- `src/highland/discover/service.py`, `chat`: retrieval and agent construction;
+- `src/highland/retrieval/hybrid.py`, `HybridRetriever.search`: retrieval stages;
+- `src/highland/runtime/agent.py`, `AgentLoop.run`: model and tool loop; and
+- `src/highland_mocks/mcp_server.py`, `main`: connector subprocess entry point.
+
+Use `F10` to step over, `F11` to step into, `Shift+F11` to step out, and `F5`
+to continue. The **Highland: Debug meeting-preparation test** configuration is
+also available for following one deterministic scenario without operating the
+browser.
+
+Disconnect the attached session in VS Code, then stop `make debug` with
+`Ctrl+C` in its terminal. The launcher restores the normal containerized API
+when the debug process exits.
+Compose builds missing images automatically. After changing frontend code,
+mock-service code, or locked production dependencies, force their images to be
+rebuilt with `HIGHLAND_DEBUG_REBUILD=1 make debug`.
+Override the configured backend for one debug session when needed:
+
+```bash
+HIGHLAND_DEBUG_MODEL_BACKEND=scripted make debug
+HIGHLAND_DEBUG_MODEL_BACKEND=cohere make debug
+```
+
+The application-level scripted chat provider consumes finite response queues
+supplied by deterministic tests and scenarios. It supports non-billable search
+debugging, but an arbitrary interactive Discover prompt has no queued response
+and intentionally fails. Use the Cohere backend when stepping through real LLM
+responses; use **Highland: Debug meeting-preparation test** when stepping
+through a deterministic scripted agent run.
+
+Editors other than VS Code can use the same `make debug` command and attach any
+Debug Adapter Protocol client to `127.0.0.1:5678`. Do not expose that debugger
+port publicly. When the editor cannot run on the same host, forward the port
+over SSH instead:
+
+```bash
+ssh -N -L 127.0.0.1:5678:127.0.0.1:5678 USER@VPS_IP
+```
+
 The service catalog is available at `http://localhost:8099`, and each service
 has interactive API documentation at `/docs`, for example
 `http://localhost:8103/docs`.

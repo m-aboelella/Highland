@@ -1,4 +1,4 @@
-.PHONY: bootstrap setup lock generate dev test reset lint typecheck web-test web-build repository-check ci release-check compose-smoke
+.PHONY: bootstrap setup lock generate dev debug test reset lint typecheck web-test web-build repository-check ci release-check compose-smoke
 
 bootstrap:
 	./bootstrap.sh
@@ -18,6 +18,9 @@ generate:
 
 dev:
 	.venv/bin/highland-mocks dev
+
+debug:
+	./scripts/debug.sh
 
 test:
 	.venv/bin/pytest

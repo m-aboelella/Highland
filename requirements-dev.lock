@@ -47,6 +47,8 @@ cryptography==50.0.0
     # via pyjwt
 cssselect2==0.9.0
     # via weasyprint
+debugpy==1.8.21
+    # via highland-educational (pyproject.toml)
 faiss-cpu==1.14.3
     # via highland-educational (pyproject.toml)
 fastapi==0.141.1
