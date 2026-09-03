@@ -1,12 +1,12 @@
-# Highland: Retrieval
+# Highland: Discovery
 
 ## From a Question to a Grounded Answer
 
-Retrieval is the first common agentic use case I want to cover. In enterprise search, the difficult part is not simply generating a fluent answer. It is grounding that answer in correct, relevant data.
+Discovery is the first agentic workflow I want to cover. In Highland, discovery combines retrieval, tool use, and an agent loop to investigate a question and produce a grounded answer. In enterprise knowledge work, the difficult part is not simply generating fluent text. It is finding the right evidence and grounding the answer in correct, relevant data.
 
-A large language model can generate convincing content, but in this situation, we do not want it to invent facts. We want Highland to find useful evidence, give that evidence to the model, and make the result transparent. The user should be able to see where each claim came from and how the model reached the answer.
+A large language model can generate convincing content, but in this situation, we do not want it to invent facts. We want Highland to retrieve useful indexed knowledge, let the model gather live information through tools, and make the result transparent. The user should be able to see where each claim came from and how the model reached the answer.
 
-I will start by showing how this experience looks in the UI. After that, we can go deeper into the retrieval and grounding concepts and the code that implements them.
+I will start by showing how discovery looks in the UI, then walk through the core code path. A later tutorial will focus specifically on retrieval itself: chunking, indexing, embeddings, and hybrid retrieval.
 
 ## User Experience
 
@@ -14,7 +14,7 @@ I will start by showing how this experience looks in the UI. After that, we can 
 
 Imagine that you work at Summit Software and are about to meet with Northwind Bank. Information about the customer is spread across several systems, and you want to understand what is happening before the meeting. A simple way to begin is to ask Highland to prepare a briefing:
 
-![Asking Highland to prepare a briefing for a meeting with Northwind](images/retrieval-prompt.png)
+![Asking Highland to prepare a briefing for a meeting with Northwind](images/discovery-prompt.png)
 
 After you select **Start discovery**, Highland begins the run. It searches for relevant knowledge, asks the model what other information it needs, calls the appropriate tools, and gradually builds an answer. This takes a little time because Highland is gathering and verifying evidence rather than asking the model to answer from memory alone.
 
@@ -22,11 +22,11 @@ After you select **Start discovery**, Highland begins the run. It searches for r
 
 When the run finishes, Highland displays the generated briefing:
 
-![The grounded Northwind meeting briefing with numbered citations](images/retrieval-grounded-answer.png)
+![The grounded Northwind meeting briefing with numbered citations](images/discovery-grounded-answer.png)
 
 Many statements in the answer have numbered citations. Selecting one opens the evidence panel and shows the exact information behind that statement:
 
-![A citation showing the Atlas CRM record used as live tool evidence](images/retrieval-citation-evidence.png)
+![A citation showing the Atlas CRM record used as live tool evidence](images/discovery-citation-evidence.png)
 
 The citation tells us which system Highland queried, which tool it called, what it requested, and which source record supports the claim. This makes the answer easier to inspect instead of asking the user to trust a block of generated text.
 
@@ -34,7 +34,7 @@ The citation tells us which system Highland queried, which tool it called, what 
 
 If you scroll farther down, you can inspect the agent loop: the sequence of model decisions, tool calls, and tool results that produced the answer. A typical product would keep this process hidden, but Highland exposes it for educational purposes so that the model's decision-making is easier to understand. The snapshot below shows a subset of the steps.
 
-![The beginning of the agent loop for the Northwind briefing](images/retrieval-agent-loop.png)
+![The beginning of the agent loop for the Northwind briefing](images/discovery-agent-loop.png)
 
 The summary shows **8 model steps**, **7 tool checks**, and **23 citations**. These numbers describe the actual run.
 
@@ -56,7 +56,7 @@ The first step is to search the existing index with the user's query:
 retrieval = await self.search(request)
 ```
 
-I will cover how this index is created and searched in a separate tutorial. For now, the important point is that the search returns a ranked collection of relevant chunks. Here is a shortened version of the [captured retrieval response](data/1-retrieval/retrieval-response.txt):
+I will cover chunking, indexing, embeddings, and hybrid retrieval in a separate tutorial. For now, the important point is that the search returns a ranked collection of relevant chunks. Here is a shortened version of the [captured retrieval response](data/1-discovery/retrieval-response.txt):
 
 ```text
 RetrievalResponse(
@@ -109,7 +109,7 @@ documents = [
 ]
 ```
 
-A shortened item from the [captured `documents` list](data/1-retrieval/documents.txt) looks like this:
+A shortened item from the [captured `documents` list](data/1-discovery/documents.txt) looks like this:
 
 ```text
 Document(
@@ -172,7 +172,7 @@ request = ChatRequest(
 response = await self.model.chat(request)
 ```
 
-The [captured first request](data/1-retrieval/chat-request.txt) contains all three parts:
+The [captured first request](data/1-discovery/chat-request.txt) contains all three parts:
 
 ```text
 ChatRequest(
@@ -185,7 +185,7 @@ ChatRequest(
 )
 ```
 
-The model can either return the final answer or request one or more tools. In the [first response from this run](data/1-retrieval/chat-response.txt), it chose a tool:
+The model can either return the final answer or request one or more tools. In the [first response from this run](data/1-discovery/chat-response.txt), it chose a tool:
 
 ```text
 ChatResponse(
@@ -219,7 +219,7 @@ state.messages.append(
 )
 ```
 
-In the [captured conversation after the first tool call](data/1-retrieval/messages-with-tool-results.txt), the important additions look like this:
+In the [captured conversation after the first tool call](data/1-discovery/messages-with-tool-results.txt), the important additions look like this:
 
 ```text
 Message(
@@ -255,7 +255,7 @@ if not response.message.tool_calls:
     )
 ```
 
-There are two related objects here. The model's [final `ChatResponse`](data/1-retrieval/final-chat-response.txt) has a `complete` finish reason and contains the generated answer and citations. The loop then wraps those values in the final [completed `RunOutcome`](data/1-retrieval/outcome.txt), which is what `DiscoverService.chat()` returns.
+There are two related objects here. The model's [final `ChatResponse`](data/1-discovery/final-chat-response.txt) has a `complete` finish reason and contains the generated answer and citations. The loop then wraps those values in the final [completed `RunOutcome`](data/1-discovery/outcome.txt), which is what `DiscoverService.chat()` returns.
 
 The citations are especially important. A citation can point to a live tool result through `tool_call_ids`:
 
@@ -284,4 +284,4 @@ Citation(
 
 Cohere returns these citations as part of the model response, including the span of answer text and the sources that support it. Highland preserves those references so the UI can connect each claim to either an indexed document or a tool result.
 
-That is the complete path in its simplest form: retrieve relevant chunks, turn them into documents, give those documents and the available tools to the model, execute any requested tools, and repeat until the model returns a final answer with citations.
+That is the complete discovery path in its simplest form: retrieve relevant chunks, turn them into documents, give those documents and the available tools to the model, execute any requested tools, and repeat until the model returns a final answer with citations.
