@@ -127,7 +127,7 @@ This conversion gives the model the relevant text and gives Highland the identif
 
 ### 3. Start the Agent Loop
 
-Next, Highland starts the MCP gateway. The gateway exposes the tools the model can use to retrieve live information or perform an action. I will cover how MCP works in a separate tutorial, so the only important detail here is that the tools are available before the loop starts:
+Next, Highland starts the MCP gateway. The gateway exposes the tools the model can use to retrieve live information or perform an action. I cover how that discovery and tool-calling path works in the [MCP and tool use tutorial](3-mcp-tools.md), so the only important detail here is that the tools are available before the loop starts:
 
 ```python
 gateway = MCPGateway(

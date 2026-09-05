@@ -1,0 +1,41 @@
+Captured model and tool sequence for run_a90a1092b1db44be977bdc9ff14ab058
+Query: Prepare a briefing for a meeting with Northwind
+
+Step 1
+Model finish reason: tool_call
+Requested: crm__get_customer({"customer_id":"cus_northwind"})
+Tool result: crm__get_customer_fhvzyts1zf7p, is_error=false
+
+Step 2
+Model finish reason: tool_call
+Requested: communications__list_messages({"customer_id":"cus_northwind","limit":20})
+Tool result: communications__list_messages_3ed9snjxvp25, is_error=false
+
+Step 3
+Model finish reason: tool_call
+Requested: support__list_customer_tickets({"customer_id":"cus_northwind"})
+Tool result: support__list_customer_tickets_rmyt2q5k0ps3, is_error=false
+
+Step 4
+Model finish reason: tool_call
+Requested: observability__list_incidents({"customer_id":"cus_northwind","status":"open"})
+Tool result: observability__list_incidents_xd0wh6fba1qc, is_error=false
+
+Step 5
+Model finish reason: tool_call
+Requested: observability__list_incidents({"status":"open"})
+Tool result: observability__list_incidents_56zk3pebhztr, is_error=false
+
+Step 6
+Model finish reason: tool_call
+Requested: observability__query_deployment_metrics({"customer_id":"cus_northwind","metric":"retrieval.p95_ms","time_range":"24h"})
+Tool result: observability__query_deployment_metrics_z5tttjt5984a, is_error=false
+
+Step 7
+Model finish reason: tool_call
+Requested: observability__query_deployment_metrics({"customer_id":"cus_northwind","metric":"retrieval.error_rate","time_range":"24h"})
+Tool result: observability__query_deployment_metrics_9v2x5hf6re5p, is_error=false
+
+Step 8
+Model finish reason: complete
+Requested: no tools
